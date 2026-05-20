@@ -147,7 +147,7 @@ export async function GET() {
         lastComputedDate: '',
         dailyActivity,
         tokensByDate: [],
-        modelUsage: {},
+        modelUsage,
         totalSessions: sessions.length,
         totalMessages: sessions.reduce((s, m) => s + (m.user_message_count ?? 0) + (m.assistant_message_count ?? 0), 0),
         longestSession: { sessionId: '', duration: 0, messageCount: 0, timestamp: '' },
