@@ -167,12 +167,12 @@ npm run lint
 
 ## Project Docs
 
-- [Roadmap](./ROADMAP.md): planned improvements and non-goals.
-- [Known limitations](./LIMITATIONS.md): accuracy, compatibility, and runtime caveats.
-- [Compatibility](./COMPATIBILITY.md): supported local files and reporting guidance.
-- [Contributing](./CONTRIBUTING.md): local setup, PR expectations, and manual test notes.
-- [Privacy](./PRIVACY.md): what data is read, exported, or edited.
-- [Security](./SECURITY.md): private vulnerability reporting and review checklist.
+- [Roadmap](./docs/ROADMAP.md): planned improvements and non-goals.
+- [Known limitations](./docs/LIMITATIONS.md): accuracy, compatibility, and runtime caveats.
+- [Compatibility](./docs/COMPATIBILITY.md): supported local files and reporting guidance.
+- [Contributing](./docs/CONTRIBUTING.md): local setup, PR expectations, and manual test notes.
+- [Privacy](./docs/PRIVACY.md): what data is read, exported, or edited.
+- [Security](./docs/SECURITY.md): private vulnerability reporting and review checklist.
 
 ## Data Sources
 
