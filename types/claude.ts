@@ -75,6 +75,7 @@ export interface SessionMeta {
   files_modified: number
   message_hours: number[]
   user_message_timestamps: string[]
+  model_usage?: Record<string, ModelUsage>
 }
 
 // ─── Facets ──────────────────────────────────────────────────────────────────
