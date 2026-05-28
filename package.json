@@ -1,6 +1,6 @@
 {
   "name": "cc-tap",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Claude Code Lens (cc-tap) — visualize your usage, costs, sessions, and tap the raw Anthropic API payloads Claude Code sends",
   "author": "Arindam Majumder <arindam@studio1hq.com> (https://github.com/Arindam200)",
   "contributors": [
