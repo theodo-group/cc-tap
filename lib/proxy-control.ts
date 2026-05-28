@@ -140,7 +140,7 @@ export function stopProxy(): { stopped: boolean; pid?: number } {
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function resolveProxyScript(): string | null {
-  // 1. cwd-relative (works for both `npm run dev` and `npx cc-lens` since
+  // 1. cwd-relative (works for both `npm run dev` and `npx cc-tap` since
   //    bin/cli.js cd's into CACHE_DIR before spawning Next.)
   const cwdPath = path.join(process.cwd(), 'proxy', 'server.js')
   if (fs.existsSync(cwdPath)) return cwdPath

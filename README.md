@@ -1,6 +1,6 @@
 ![cc-lens CLI](./public/cc-lens.png)
 
-# Claude Code Lens (cc-lens)
+# Claude Code Lens (cc-tap)
 
 > **This is a Theodo Group fork of [Arindam200/cc-lens](https://github.com/Arindam200/cc-lens).**
 > It adds an inspector proxy and a real-time **Live Capture** view that intercepts the raw
@@ -11,8 +11,11 @@
 Local analytics dashboard for Claude Code. No cloud, no telemetry, just your `~/.claude/` data, visualized.
 
 ```bash
-npx github:theodo-group/cc-lens
+npx cc-tap
 ```
+
+> Published to npm as **`cc-tap`** (the `cc-lens` name was taken). To run the latest
+> straight from this fork's source instead: `npx github:theodo-group/cc-lens`.
 
 The CLI finds a free local port, starts the dashboard, and opens it in your browser.
 
@@ -122,20 +125,20 @@ Import is intentionally preview-only right now. It shows which sessions are new 
 
 ## Multiple Claude Profiles
 
-By default, `cc-lens` reads `~/.claude/`. To point it at another Claude Code config directory, set `CLAUDE_CONFIG_DIR`:
+By default, `cc-tap` reads `~/.claude/`. To point it at another Claude Code config directory, set `CLAUDE_CONFIG_DIR`:
 
 ```bash
 # Default profile
-npx cc-lens
+npx cc-tap
 
 # Work profile
-CLAUDE_CONFIG_DIR=~/.claude-work npx cc-lens
+CLAUDE_CONFIG_DIR=~/.claude-work npx cc-tap
 ```
 
 On Windows PowerShell:
 
 ```powershell
-$env:CLAUDE_CONFIG_DIR="C:\Users\you\.claude-work"; npx cc-lens
+$env:CLAUDE_CONFIG_DIR="C:\Users\you\.claude-work"; npx cc-tap
 ```
 
 The active config directory is shown in the CLI banner on launch.
@@ -180,7 +183,7 @@ npm run lint
 
 ## Data Sources
 
-`cc-lens` reads local Claude Code files directly:
+`cc-tap` reads local Claude Code files directly:
 
 - `~/.claude/projects/<slug>/*.jsonl`: session JSONL and replay data
 - `~/.claude/stats-cache.json`: aggregate stats when available
@@ -195,4 +198,4 @@ Dashboard data refreshes every 5 seconds while the app is open.
 
 ## Cost Estimates
 
-Claude Code stores token counts and model identifiers, not final billing totals. `cc-lens` estimates cost using the pricing table in `lib/pricing.ts`. If provider pricing changes, update that file to keep estimates current.
+Claude Code stores token counts and model identifiers, not final billing totals. `cc-tap` estimates cost using the pricing table in `lib/pricing.ts`. If provider pricing changes, update that file to keep estimates current.

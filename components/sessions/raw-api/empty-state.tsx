@@ -11,7 +11,7 @@ export function CapturesEmptyState({ available }: { available: boolean }) {
           </div>
           <h3 className="text-base font-semibold">Inspector proxy not running</h3>
           <p className="text-sm text-muted-foreground">
-            Start <code className="rounded bg-muted px-1 py-0.5 text-xs">npx cc-lens</code> without{' '}
+            Start <code className="rounded bg-muted px-1 py-0.5 text-xs">npx cc-tap</code> without{' '}
             <code className="rounded bg-muted px-1 py-0.5 text-xs">--no-proxy</code> to capture API
             traffic. The dashboard will show captures here once Claude Code makes a request through it.
           </p>
