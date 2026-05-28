@@ -32,14 +32,15 @@ function printBanner() {
     `${O}${B} ╚═════╝ ╚═════╝     ╚══════╝╚══════╝╚═╝  ╚═══╝╚══════╝${R}`,
   ]
 
-  const author = link(`${O2}Arindam${R}`, 'https://github.com/Arindam200')
+  const author   = link(`${O2}Arindam${R}`, 'https://github.com/Arindam200')
+  const upstream = link(`${O2}cc-lens${R}`, 'https://github.com/Arindam200/cc-lens')
 
   console.log()
   art.forEach((line) => console.log('  ' + line))
   console.log()
   const configDir = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude')
-  console.log(`  ${B}${O}Claude Code Lens${R}   ${DIM}—  your ~/.claude/ at a glance${R}`)
-  console.log(`  ${DIM}Made with ♥ by ${R}${author}`)
+  console.log(`  ${B}${O}Claude Code Lens${R} ${DIM}(cc-tap)${R}   ${DIM}—  your ~/.claude/ at a glance${R}`)
+  console.log(`  ${DIM}Theodo fork of ${R}${upstream}${DIM} · originally made with ♥ by ${R}${author}`)
   console.log()
   console.log(`  ${DIM}Config dir:${R}  ${O2}${configDir}${R}`)
   if (process.env.CLAUDE_CONFIG_DIR) {
