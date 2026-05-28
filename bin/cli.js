@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* eslint-disable @typescript-eslint/no-require-imports */
 
-const { spawn, exec } = require('child_process')
+const { spawn, spawnSync, exec } = require('child_process')
 const net  = require('net')
 const os   = require('os')
 const path = require('path')
@@ -32,14 +32,15 @@ function printBanner() {
     `${O}${B} ╚═════╝ ╚═════╝     ╚══════╝╚══════╝╚═╝  ╚═══╝╚══════╝${R}`,
   ]
 
-  const author = link(`${O2}Arindam${R}`, 'https://github.com/Arindam200')
+  const author   = link(`${O2}Arindam${R}`, 'https://github.com/Arindam200')
+  const upstream = link(`${O2}cc-lens${R}`, 'https://github.com/Arindam200/cc-lens')
 
   console.log()
   art.forEach((line) => console.log('  ' + line))
   console.log()
   const configDir = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude')
-  console.log(`  ${B}${O}Claude Code Lens${R}   ${DIM}—  your ~/.claude/ at a glance${R}`)
-  console.log(`  ${DIM}Made with ♥ by ${R}${author}`)
+  console.log(`  ${B}${O}Claude Code Lens${R} ${DIM}(cc-tap)${R}   ${DIM}—  your ~/.claude/ at a glance${R}`)
+  console.log(`  ${DIM}Theodo fork of ${R}${upstream}${DIM} · originally made with ♥ by ${R}${author}`)
   console.log()
   console.log(`  ${DIM}Config dir:${R}  ${O2}${configDir}${R}`)
   if (process.env.CLAUDE_CONFIG_DIR) {
@@ -156,11 +157,31 @@ async function main() {
   child.stdout.on('data', (d) => { process.stdout.write(d); checkReady(d.toString()) })
   child.stderr.on('data', (d) => { process.stderr.write(d); checkReady(d.toString()) })
 
-  child.on('exit', (code) => process.exit(code ?? 0))
+  // Tools in the `next dev` stack query the terminal (OSC 11 background color,
+  // cursor position, device attributes). Those replies arrive on stdin; if we
+  // die before consuming them — and without resetting input modes — they leak
+  // into the shell as garbage. Restore the terminal on the way out.
+  function restoreTerminal() {
+    try { if (process.stdin.isTTY) process.stdin.setRawMode(false) } catch { /* */ }
+    // show cursor; disable bracketed-paste and mouse reporting if left on
+    try { if (process.stdout.isTTY) process.stdout.write('\x1b[?25h\x1b[?2004l\x1b[?1000l\x1b[?1006l') } catch { /* */ }
+    try { spawnSync('stty', ['sane'], { stdio: 'inherit' }) } catch { /* */ }
+  }
 
-  // Windows doesn't support SIGINT/SIGTERM — child.kill() (no arg) works cross-platform.
-  process.on('SIGINT',  () => { child.kill(); process.exit(0) })
-  process.on('SIGTERM', () => { child.kill(); process.exit(0) })
+  // Forward the signal and let Next exit on its own (so it can drain the
+  // pending query replies) rather than killing + exiting in the same tick.
+  let exiting = false
+  function shutdown(signal) {
+    if (exiting) return
+    exiting = true
+    try { child.kill(signal) } catch { /* */ }
+  }
+
+  child.on('exit', (code) => { restoreTerminal(); process.exit(code ?? 0) })
+
+  // Windows doesn't support POSIX signals — child.kill() still works cross-platform.
+  process.on('SIGINT',  () => shutdown('SIGINT'))
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
 }
 
 main().catch((err) => { console.error(err); process.exit(1) })
