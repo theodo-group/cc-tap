@@ -21,7 +21,6 @@ import {
   Download,
   Upload,
   Database,
-  Layers,
   History,
   FileJson2,
   AlertTriangle,
@@ -39,7 +38,6 @@ const fetcher = (url: string) =>
 
 interface ExportPreview {
   sessionCount: number
-  facetCount: number
   historyEntries: number
   hasStatsCache: boolean
   totalSessionsIndexed: number
@@ -163,13 +161,13 @@ export default function ExportPage() {
           <div>
             <h2 className="text-lg font-semibold tracking-tight">What will be exported</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              One JSON file includes stats cache, session metadata, facets, and command history. Numbers below respect the optional date range.
+              One JSON file includes stats cache, session metadata, and command history. Numbers below respect the optional date range.
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {previewLoading && !preview ? (
               <>
-                {Array.from({ length: 4 }).map((_, i) => (
+                {Array.from({ length: 3 }).map((_, i) => (
                   <Skeleton key={i} className="h-[104px] rounded-xl" />
                 ))}
               </>
@@ -191,20 +189,6 @@ export default function ExportPage() {
                         ? 'In selected range'
                         : `of ${preview?.totalSessionsIndexed ?? '—'} indexed`}
                     </p>
-                  </CardContent>
-                </Card>
-                <Card className="shadow-sm">
-                  <CardHeader className="pb-2">
-                    <CardDescription className="flex items-center gap-2">
-                      <Layers className="size-4 text-primary" />
-                      Facets
-                    </CardDescription>
-                    <CardTitle className="text-2xl tabular-nums">
-                      {preview?.facetCount ?? '—'}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <p className="text-xs text-muted-foreground">Linked to exported sessions</p>
                   </CardContent>
                 </Card>
                 <Card className="shadow-sm">

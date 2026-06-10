@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { readSessionMeta, readFacet, getSessions } from '@/lib/claude-reader'
+import { getAllParsedSessions } from '@/lib/claude-reader'
 import { estimateCostFromUsage } from '@/lib/pricing'
 
 export const dynamic = 'force-dynamic'
@@ -9,11 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const [meta, facet] = await Promise.all([readSessionMeta(id), readFacet(id)])
-
-  // readSessionMeta only finds session-meta/*.json files (legacy path).
-  // Fall back to JSONL-derived sessions for machines without that directory.
-  const resolved = meta ?? (await getSessions()).find(s => s.session_id === id) ?? null
+  const resolved = (await getAllParsedSessions()).find(s => s.session_id === id) ?? null
 
   if (!resolved) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 })
@@ -26,6 +22,14 @@ export async function GET(
     cache_read_input_tokens: resolved.cache_read_input_tokens ?? 0,
   })
 
-  return NextResponse.json({ session: { ...resolved, facet, estimated_cost } })
+  return NextResponse.json({
+    session: {
+      ...resolved,
+      estimated_cost,
+      slug: resolved.slug_name,
+      ai_title: resolved.ai_title,
+      version: resolved.cc_version,
+      git_branch: resolved.git_branch,
+    },
+  })
 }
-

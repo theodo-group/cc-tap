@@ -100,10 +100,25 @@ export interface SessionWithFacet extends SessionMeta {
   facet?: Facet
   estimated_cost: number
   slug?: string
+  ai_title?: string
   version?: string
   git_branch?: string
   has_compaction?: boolean
   has_thinking?: boolean
+}
+
+// ─── Live Sessions (~/.claude/sessions) ──────────────────────────────────────
+
+export interface LiveSession {
+  pid: number
+  sessionId: string
+  cwd: string
+  startedAt: number
+  version?: string
+  kind?: string
+  entrypoint?: string
+  status?: string
+  updatedAt?: number
 }
 
 // ─── Replay / JSONL ──────────────────────────────────────────────────────────
@@ -133,6 +148,7 @@ export interface ReplayTurn {
   uuid: string
   parentUuid: string | null
   type: 'user' | 'assistant'
+  is_sidechain?: boolean
   timestamp: string
   model?: string
   usage?: TurnUsage
@@ -164,6 +180,7 @@ export interface SummaryEvent {
 export interface ReplayData {
   session_id: string
   slug?: string
+  ai_title?: string
   version?: string
   git_branch?: string
   turns: ReplayTurn[]
@@ -196,6 +213,40 @@ export interface ProjectSummary {
   uses_mcp: boolean
   uses_task_agent: boolean
   branches: string[]
+}
+
+// ─── Project Trends ──────────────────────────────────────────────────────────
+
+export interface ProjectTrendPoint {
+  date: string
+  sessions: number
+  messages: number
+  duration_minutes: number
+  estimated_cost: number
+  input_tokens: number
+  output_tokens: number
+  tool_calls: number
+  agent_sessions: number
+  mcp_sessions: number
+  web_search_sessions: number
+  tool_errors: number
+}
+
+export interface ProjectTrendDelta {
+  sessions_pct: number | null
+  estimated_cost_pct: number | null
+  duration_pct: number | null
+  tool_calls_pct: number | null
+}
+
+export interface ProjectTrend {
+  slug: string
+  project_path: string
+  display_name: string
+  current: ProjectTrendPoint
+  previous: ProjectTrendPoint
+  delta: ProjectTrendDelta
+  series: ProjectTrendPoint[]
 }
 
 // ─── Tool Analytics ───────────────────────────────────────────────────────────

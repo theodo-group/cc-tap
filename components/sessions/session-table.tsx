@@ -58,6 +58,7 @@ export function SessionTable({ sessions }: Props) {
       s = s.filter(x =>
         x.project_path?.toLowerCase().includes(q) ||
         x.first_prompt?.toLowerCase().includes(q) ||
+        x.ai_title?.toLowerCase().includes(q) ||
         x.slug?.toLowerCase().includes(q)
       )
     }
@@ -211,9 +212,9 @@ export function SessionTable({ sessions }: Props) {
                       >
                         {projectName}
                       </Link>
-                      {s.first_prompt && (
-                        <p className="text-muted-foreground/60 truncate text-[12px]">
-                          {s.first_prompt.slice(0, 60)}
+                      {(s.ai_title || s.first_prompt) && (
+                        <p className="text-muted-foreground/60 truncate text-[12px]" title={s.ai_title || s.first_prompt}>
+                          {(s.ai_title || s.first_prompt).slice(0, 60)}
                         </p>
                       )}
                     </td>
