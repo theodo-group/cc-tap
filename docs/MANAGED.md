@@ -26,6 +26,10 @@ produces ~40 KB/day; a 50-dev org ~60 MB/month. OTel metric points are
 smaller. One modest box serves hundreds of teams — this is a
 high-margin, low-infra product.
 
+> **Stack decided:** Neon Postgres + Vercel. See `MANAGED-PLAN.md` for the
+> concrete implementation plan, data model, and milestones. The hosting
+> table below is kept for the single-tenant/enterprise option.
+
 ## Where to host
 
 | Stage | Recommendation | Why |
