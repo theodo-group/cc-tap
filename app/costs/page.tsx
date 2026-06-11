@@ -7,6 +7,7 @@ import { CostOverTimeChart, type CostWindow } from '@/components/costs/cost-over
 import { CostByProjectChart } from '@/components/costs/cost-by-project-chart'
 import { ModelTokenTable } from '@/components/costs/model-token-table'
 import { CacheEfficiencyPanel } from '@/components/costs/cache-efficiency-panel'
+import { BudgetAlertBanner } from '@/components/costs/budget-alert-banner'
 import { formatCost } from '@/lib/decode'
 import { PRICING } from '@/lib/pricing'
 import type { CostAnalytics } from '@/types/claude'
@@ -29,6 +30,8 @@ export default function CostsPage() {
     <div className="flex flex-col min-h-screen">
       <TopBar title="Costs" subtitle="Estimated spend from ~/.claude/" />
       <div className="p-6 space-y-6">
+
+        <BudgetAlertBanner />
 
         {error && (
           <Alert variant="destructive">
