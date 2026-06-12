@@ -13,8 +13,15 @@ This roadmap is intentionally practical. `cc-lens` should stay local-first, fast
 
 - **Redacted export**: Let users export selected sessions with prompts, paths, and command output redacted.
 - **Pricing overrides**: Allow local pricing overrides and show the pricing table date used for estimates.
-- **Actionable insights**: Highlight patterns like low cache hit rate, frequent tool errors, expensive sessions, and early compaction.
 - **Compatibility fixtures**: Maintain sample fixtures for known Claude Code local file formats.
+
+## Shipped
+
+- **Actionable insights** (`/insights`): low cache hit rate, premium models on light sessions, compaction thrash, and plan fit — each with a monthly dollar estimate.
+- **Budgets and spend alerts**: monthly budget with pacing projection and daily spike detection.
+- **Team adoption and MCP governance** (`/team`): per-member feature adoption, idle members, and an inventory of MCP servers in use.
+- **Slack digest** (`cc-lens digest`): scheduled-friendly summary posts for solo or team scope.
+- **Wrapped** (`/wrapped`): shareable yearly stats card.
 
 ## Later
 

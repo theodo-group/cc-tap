@@ -66,8 +66,29 @@ Automate freshness with cron:
 - Total team cost, sessions, messages, and cache savings
 - Cost over time, stacked by member
 - Per-member table: sessions, cost, tokens, cache hit rate, active time,
-  top project, last active
+  top project, last active (members inactive 14+ days are badged idle)
+- Feature adoption per member — plan mode, agents, skills, MCP, web — with
+  cost per session, for coaching rollout rather than policing it
+- MCP server inventory: every server seen in team sessions, its call volume,
+  and who uses it — review anything you don't recognize
 - Claude Code version skew — who is running an outdated CLI
+
+## Slack digest
+
+Any member (or a cron job) can post a team summary to Slack:
+
+```bash
+npx cc-lens digest --team --webhook https://hooks.slack.com/services/...
+```
+
+The digest covers spend vs the prior period, top members, and session
+counts. Run it without `--team` for a personal digest with budget pace,
+potential savings, and spend-spike alerts. Save the webhook once in
+`~/.cc-lens/config.json` (`slack_webhook_url`) and schedule it weekly:
+
+```bash
+0 9 * * 1  npx cc-lens digest --team
+```
 
 ## What leaves each member's machine
 
