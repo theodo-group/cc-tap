@@ -7,8 +7,8 @@ const os   = require('os')
 const path = require('path')
 const fs   = require('fs')
 
-const PKG_DIR   = path.join(__dirname, '..')
-const CACHE_DIR = path.join(os.homedir(), '.cc-lens')
+const PKG_DIR    = path.join(__dirname, '..')
+const SERVER_JS  = path.join(PKG_DIR, '.next', 'standalone', 'server.js')
 
 // ANSI helpers — Claude's warm orange palette
 const O   = '\x1b[38;5;208m'  // orange
@@ -54,7 +54,7 @@ function findFreePort(port = 3000) {
     const server = net.createServer()
     server.unref()
     server.on('error', () => resolve(findFreePort(port + 1)))
-    server.listen(port, () => server.close(() => resolve(port)))
+    server.listen(port, '127.0.0.1', () => server.close(() => resolve(port)))
   })
 }
 
@@ -66,88 +66,205 @@ function openBrowser(url) {
   exec(cmd)
 }
 
-// Source dirs/files to mirror into ~/.cc-lens/
-const SRC_DIRS  = ['app', 'components', 'lib', 'types', 'public', 'proxy']
-const SRC_FILES = ['next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'components.json']
+function parseArgs(argv) {
+  const args = { _: [] }
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]
+    if (a.startsWith('--')) {
+      const key = a.slice(2)
+      const next = argv[i + 1]
+      if (next !== undefined && !next.startsWith('--')) { args[key] = next; i++ }
+      else args[key] = true
+    } else {
+      args._.push(a)
+    }
+  }
+  return args
+}
 
-function syncSource(pkg) {
-  fs.mkdirSync(CACHE_DIR, { recursive: true })
-  for (const dir of SRC_DIRS) {
-    const src = path.join(PKG_DIR, dir)
-    if (fs.existsSync(src)) {
-      fs.cpSync(src, path.join(CACHE_DIR, dir), { recursive: true, force: true })
-    }
+function requireStandaloneBuild() {
+  if (!fs.existsSync(SERVER_JS)) {
+    console.error(`  ${O}✗${R}  Standalone build not found at ${SERVER_JS}`)
+    console.error(`     If you're running from a cloned repo, run ${B}npm run build:dist${R} first.`)
+    process.exit(1)
   }
-  for (const file of SRC_FILES) {
-    const src = path.join(PKG_DIR, file)
-    if (fs.existsSync(src)) {
-      fs.copyFileSync(src, path.join(CACHE_DIR, file))
+}
+
+/** Boot the standalone server silently on a free loopback port. */
+async function startSilentServer() {
+  const port = await findFreePort(49500)
+  const child = spawn(process.execPath, [SERVER_JS], {
+    cwd: path.dirname(SERVER_JS),
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, PORT: String(port), HOSTNAME: '127.0.0.1', NODE_ENV: 'production' },
+  })
+  const url = `http://127.0.0.1:${port}`
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('server did not start within 30s')), 30_000)
+    function check(d) {
+      if (/Local:|ready|started server|listening on/i.test(d.toString())) {
+        clearTimeout(timer)
+        resolve()
+      }
     }
+    child.stdout.on('data', check)
+    child.stderr.on('data', check)
+    child.on('exit', (code) => { clearTimeout(timer); reject(new Error(`server exited early (code ${code})`)) })
+  })
+  return { child, url }
+}
+
+/** fetch with a deadline so a stalled endpoint can't hang the command forever
+ *  (which would also keep the `finally { child.kill() }` cleanup from running). */
+async function fetchWithTimeout(url, options = {}, timeoutMs = 120_000) {
+  try {
+    return await fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) })
+  } catch (err) {
+    if (err && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      throw new Error(`request to ${url} timed out after ${Math.round(timeoutMs / 1000)}s`)
+    }
+    throw new Error(`request to ${url} failed: ${err?.message ?? err}`)
   }
-  // Write a minimal package.json with only runtime dependencies —
-  // devDependencies (eslint, shadcn, etc.) are not needed and may have
-  // pinned versions that don't exist on npm, causing ETARGET errors.
-  fs.writeFileSync(path.join(CACHE_DIR, 'package.json'), JSON.stringify({
-    name: 'cc-lens-runtime',
-    version: pkg.version,
-    dependencies: pkg.dependencies,
-  }, null, 2))
+}
+
+// cc-tap push --to <hub-url> --name <you> [--email x] [--machine x] [--titles] [--token x]
+async function runPush(args) {
+  printBanner()
+  requireStandaloneBuild()
+
+  const to = args.to
+  const name = args.name
+  if (!to || !name || typeof to !== 'string' || typeof name !== 'string') {
+    console.error(`  ${O}✗${R}  Usage: ${B}cc-tap push --to <hub-url> --name <your-name>${R}`)
+    console.error(`     Optional: ${DIM}--email <email> --machine <label> --titles --token <shared-token>${R}`)
+    process.exit(1)
+  }
+  const token = (typeof args.token === 'string' && args.token) || process.env.CC_LENS_TEAM_TOKEN
+
+  console.log(`  ${DIM}Reading ~/.claude and building a redacted team export…${R}`)
+  const { child, url } = await startSilentServer()
+  try {
+    const exportRes = await fetchWithTimeout(`${url}/api/export/team`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        memberName: name,
+        ...(typeof args.email === 'string' ? { memberEmail: args.email } : {}),
+        ...(typeof args.machine === 'string' ? { machine: args.machine } : {}),
+        redaction: args.titles ? 'titles' : 'metrics',
+      }),
+    })
+    if (!exportRes.ok) throw new Error(`local export failed (${exportRes.status}): ${await exportRes.text()}`)
+    const payload = await exportRes.json()
+
+    const hubUrl = to.replace(/\/$/, '')
+    console.log(`  ${DIM}Pushing ${payload.sessions.length} sessions to${R} ${O2}${hubUrl}${R}`)
+    const pushRes = await fetchWithTimeout(`${hubUrl}/api/team/push`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    })
+    if (!pushRes.ok) throw new Error(`hub rejected push (${pushRes.status}): ${await pushRes.text()}`)
+    const result = await pushRes.json()
+    console.log(`\n  ${O}✓${R}  Pushed ${B}${result.sessions}${R} sessions as ${B}${result.member}${R} (${result.stored_as})`)
+    console.log(`  ${DIM}Redaction: ${args.titles ? 'titles (first prompts included)' : 'metrics only'}${R}\n`)
+  } finally {
+    child.kill()
+  }
+}
+
+// cc-tap digest [--days 7] [--team]
+// Prints a formatted spend digest in the terminal. Slack/webhook alerts are
+// a managed-version feature and intentionally absent from the npm package.
+async function runDigest(args) {
+  printBanner()
+  requireStandaloneBuild()
+
+  const days = Number(args.days) >= 1 ? Math.floor(Number(args.days)) : 7
+  const scope = args.team ? 'team' : 'local'
+
+  console.log(`  ${DIM}Building ${scope} digest for the last ${days} days…${R}`)
+  const { child, url } = await startSilentServer()
+  let digest
+  try {
+    const res = await fetchWithTimeout(`${url}/api/digest?days=${days}&scope=${scope}`)
+    if (!res.ok) throw new Error(`digest failed (${res.status}): ${await res.text()}`)
+    digest = await res.json()
+  } finally {
+    child.kill()
+  }
+
+  const usd = (n) => `$${n < 10 && n > 0 ? n.toFixed(2) : Math.round(n).toLocaleString()}`
+  const row = (label, value) => console.log(`  ${DIM}${label.padEnd(14)}${R}${value}`)
+
+  const deltaPct = digest.prev_cost > 0
+    ? Math.round(((digest.total_cost - digest.prev_cost) / digest.prev_cost) * 100)
+    : null
+  const delta = deltaPct === null ? ''
+    : deltaPct >= 0
+      ? `   ${O}▲ ${deltaPct}%${R} ${DIM}vs prior ${digest.period_days} days${R}`
+      : `   ${O2}▼ ${-deltaPct}%${R} ${DIM}vs prior ${digest.period_days} days${R}`
+
+  console.log()
+  console.log(`  ${B}${O}Claude Code digest${R}  ${DIM}—  last ${digest.period_days} days${scope === 'team' ? ' (team)' : ''}, since ${digest.since}${R}`)
+  console.log()
+  row('Spend', `${B}${usd(digest.total_cost)}${R}${delta}`)
+  row('Sessions', `${digest.sessions}`)
+  if (typeof digest.cache_hit_rate === 'number') {
+    row('Cache hits', `${Math.round(digest.cache_hit_rate * 100)}%`)
+  }
+  if (digest.top.length > 0) {
+    const label = scope === 'team' ? 'Top members' : 'Top projects'
+    row(label, digest.top.map((t) => `${t.name} ${DIM}(${usd(t.cost)})${R}`).join(', '))
+  }
+  if (digest.potential_monthly_savings > 1) {
+    row('Savings', `~${usd(digest.potential_monthly_savings)}/mo potential ${DIM}— see the Insights page${R}`)
+  }
+  if (digest.budget) {
+    const pct = Math.round((digest.budget.month_to_date_cost / digest.budget.monthly_budget_usd) * 100)
+    row('Budget', `${usd(digest.budget.month_to_date_cost)} of ${usd(digest.budget.monthly_budget_usd)} used ${DIM}(${pct}%)${R}`)
+  }
+  for (const a of digest.anomalies ?? []) {
+    console.log(`  ${O}⚠${R}  Spend spike on ${B}${a.date}${R}: ${usd(a.cost)} vs ${usd(a.baseline)} daily median`)
+  }
+  console.log()
 }
 
 async function main() {
-  printBanner()
-
-  const pkg = require(path.join(PKG_DIR, 'package.json'))
-
-  // Check whether ~/.cc-lens/ is up-to-date for this version
-  const versionFile = path.join(CACHE_DIR, '.cc-lens-version')
-  const cachedVersion = fs.existsSync(versionFile)
-    ? fs.readFileSync(versionFile, 'utf8').trim()
-    : null
-
-  // Use Next's JS entry (not node_modules/.bin/next[.cmd]) — Windows EINVAL if spawn() tries to exec .cmd without shell.
-  const nextCli = path.join(CACHE_DIR, 'node_modules', 'next', 'dist', 'bin', 'next')
-  // npm install is the slow part — only re-run when version changes or deps disappear.
-  const installNeeded = cachedVersion !== pkg.version || !fs.existsSync(nextCli)
-
-  // Always sync source from PKG_DIR → CACHE_DIR so newer commits / hotfixes
-  // pulled by `npx github:...` take effect even when the version string
-  // hasn't been bumped. cp -r of small dirs is fast (~tens of ms).
-  syncSource(pkg)
-
-  if (installNeeded) {
-    console.log(`  ${DIM}Installing dependencies (first run, may take a minute)…${R}\n`)
-    await new Promise((resolve, reject) => {
-      const install = spawn('npm', ['install', '--prefer-offline', '--no-package-lock'], {
-        cwd: CACHE_DIR,
-        stdio: 'inherit',
-        shell: true,
-      })
-      install.on('exit', (code) =>
-        code === 0 ? resolve() : reject(new Error(`npm install failed (exit ${code})`))
-      )
-    })
-    fs.writeFileSync(versionFile, pkg.version)
+  const args = parseArgs(process.argv.slice(2))
+  if (args._[0] === 'push') {
+    await runPush(args)
+    return
+  }
+  if (args._[0] === 'digest') {
+    await runDigest(args)
+    return
   }
 
-  const port = await findFreePort(3000)
-  const url  = `http://localhost:${port}`
+  printBanner()
+  requireStandaloneBuild()
+
+  // Bind to loopback only — this server exposes private Claude history.
+  // Users who really need LAN access can set HOSTNAME=0.0.0.0 explicitly.
+  const hostname = process.env.HOSTNAME ?? '127.0.0.1'
+  const port     = await findFreePort(Number(process.env.PORT) || 3000)
+  const url      = `http://${hostname === '0.0.0.0' ? 'localhost' : hostname}:${port}`
 
   console.log(`  ${DIM}Starting server on${R} ${O2}${B}${url}${R}`)
   console.log(`  ${DIM}Inspector proxy is launched on demand from the dashboard.${R}\n`)
 
-  // On Windows, mixing 'inherit' + 'pipe' in stdio causes EINVAL. Use 'ignore'
-  // for stdin — Next.js dev server doesn't need user input from stdin.
-  const child = spawn(process.execPath, [nextCli, 'dev', '--webpack', '--port', String(port)], {
-    cwd: CACHE_DIR,
+  const child = spawn(process.execPath, [SERVER_JS], {
+    cwd: path.dirname(SERVER_JS),
     stdio: [process.platform === 'win32' ? 'ignore' : 'inherit', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: String(port) },
+    env: { ...process.env, PORT: String(port), HOSTNAME: hostname, NODE_ENV: 'production' },
   })
 
   let opened = false
-
   function checkReady(text) {
-    if (!opened && /Local:|ready|started server/i.test(text)) {
+    if (!opened && /Local:|ready|started server|listening on/i.test(text)) {
       opened = true
       console.log(`\n  ${O}✓${R}  Opening ${B}${url}${R} in your browser…\n`)
       openBrowser(url)
@@ -168,7 +285,7 @@ async function main() {
     try { spawnSync('stty', ['sane'], { stdio: 'inherit' }) } catch { /* */ }
   }
 
-  // Forward the signal and let Next exit on its own (so it can drain the
+  // Forward the signal and let the server exit on its own (so it can drain the
   // pending query replies) rather than killing + exiting in the same tick.
   let exiting = false
   function shutdown(signal) {

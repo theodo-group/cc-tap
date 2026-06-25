@@ -1,16 +1,16 @@
 {
   "name": "cc-tap",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Claude Code Lens (cc-tap) — visualize your usage, costs, sessions, and tap the raw Anthropic API payloads Claude Code sends",
   "author": "Arindam Majumder <arindam@studio1hq.com> (https://github.com/Arindam200)",
   "contributors": [
     "Theodo Group (https://github.com/theodo-group)"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/theodo-group/cc-lens#readme",
+  "homepage": "https://github.com/theodo-group/cc-tap#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/theodo-group/cc-lens.git"
+    "url": "https://github.com/theodo-group/cc-tap.git"
   },
   "publishConfig": {
     "access": "public"
@@ -26,29 +26,25 @@
     "cli"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "bin": {
     "cc-tap": "bin/cli.js"
   },
   "files": [
     "bin",
-    "app",
-    "components",
-    "lib",
-    "proxy",
-    "types",
-    "public",
-    "next.config.*",
-    "tsconfig.json",
-    "postcss.config.*",
-    "components.json"
+    ".next/standalone",
+    ".next/static",
+    "public"
   ],
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build",
+    "build:dist": "next build && node bin/prepare-standalone.js",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build:dist"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4",
@@ -81,7 +77,8 @@
     "@types/better-sqlite3": "^7.6.13",
     "eslint": "9.39.3",
     "eslint-config-next": "16.2.2",
-    "shadcn": "^4.2.0"
+    "shadcn": "^4.2.0",
+    "vitest": "^4.1.8"
   },
   "overrides": {
     "@eslint/eslintrc": "3.3.4"

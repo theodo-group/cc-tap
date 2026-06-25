@@ -14,8 +14,8 @@ Local analytics dashboard for Claude Code. No cloud, no telemetry, just your `~/
 npx cc-tap
 ```
 
-> Published to npm as **`cc-tap`** (the `cc-lens` name was taken). To run the latest
-> straight from this fork's source instead: `npx github:theodo-group/cc-lens`.
+> Published to npm as **`cc-tap`** (the `cc-lens` name was taken). The CLI runs a
+> prebuilt standalone bundle, so it boots instantly with no install or compile step.
 
 The CLI finds a free local port, starts the dashboard, and opens it in your browser.
 

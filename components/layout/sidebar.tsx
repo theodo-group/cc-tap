@@ -4,8 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, FolderOpen, MessageSquare, DollarSign,
-  Wrench, Activity, History, CheckSquare, FileText,
-  Brain, Settings, Download, Moon, Sun, PanelLeftClose, PanelLeft, Radio,
+  Wrench, Activity, History, Blocks, FileText, Lightbulb, Gift,
+  Brain, Settings, Download, Users, ListTodo, Moon, Sun, PanelLeftClose, PanelLeft, Radio,
 } from 'lucide-react'
 import { useTheme } from '@/components/theme-provider'
 import { useSidebar } from '@/components/layout/sidebar-context'
@@ -19,11 +19,15 @@ const NAV = [
   { href: '/sessions', label: 'Sessions',  icon: MessageSquare   },
   { href: '/live',     label: 'Live',      icon: Radio           },
   { href: '/costs',    label: 'Costs',     icon: DollarSign      },
+  { href: '/insights', label: 'Insights',  icon: Lightbulb       },
   { href: '/tools',    label: 'Tools',     icon: Wrench          },
   { href: '/activity', label: 'Activity',  icon: Activity        },
   { href: '/history',  label: 'History',   icon: History         },
-  { href: '/todos',    label: 'Todos',     icon: CheckSquare     },
+  { href: '/workspace', label: 'Workspace', icon: Blocks         },
+  { href: '/team',     label: 'Team',      icon: Users           },
+  { href: '/wrapped',  label: 'Wrapped',   icon: Gift            },
   { href: '/plans',    label: 'Plans',     icon: FileText        },
+  { href: '/tasks',    label: 'Tasks',     icon: ListTodo        },
   { href: '/memory',   label: 'Memory',    icon: Brain           },
   { href: '/settings', label: 'Settings',  icon: Settings        },
   { href: '/export',   label: 'Export',    icon: Download        },

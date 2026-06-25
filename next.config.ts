@@ -8,6 +8,25 @@ import { fileURLToPath } from "url";
 const packageRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
+  // Produces .next/standalone/ with a self-contained server.js + minimal node_modules,
+  // so `npx cc-tap` can launch immediately without `npm install` on first run.
+  output: 'standalone',
+  // better-sqlite3 is a native addon (used by the inspector DB and the proxy).
+  // Keep it external so it's require()'d from node_modules at runtime — both by
+  // Next's server graph and by the separately-spawned proxy/server.js — rather
+  // than being bundled by webpack (which breaks native .node binaries).
+  serverExternalPackages: ['better-sqlite3'],
+  outputFileTracingRoot: packageRoot,
+  outputFileTracingExcludes: {
+    '*': [
+      '.claude/**',
+      '.git/**',
+      'node_modules/.cache/**',
+      '**/*.md',
+      '**/*.png',
+      '**/*.jpg',
+    ],
+  },
   turbopack: {
     root: packageRoot,
   },
