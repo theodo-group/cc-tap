@@ -9,6 +9,17 @@ This project follows a simple changelog format:
 - `Fixed` for bug fixes
 - `Security` for vulnerability fixes or privacy hardening
 
+## 0.7.0
+
+### Added
+
+- Live tab: an **Assembled** response view that reconstructs the final message from the SSE stream (concatenated text, `tool_use` inputs built from `input_json_delta`, final `stop_reason` + merged usage), shown as pretty-printed JSON.
+- **Response Assembled** download (top action strip and the Response card) — saves the reassembled message as JSON, alongside the existing raw **Response SSE** download.
+
+### Changed
+
+- Live tab: the raw SSE response is now pretty-printed per event (padding trimmed, `data:` JSON indented, consecutive `ping`s collapsed) and no longer wraps mid-token. An **Assembled / Raw SSE** toggle switches between the two views.
+
 ## 0.6.0
 
 Syncs upstream [Arindam200/cc-lens v0.4.0](https://github.com/Arindam200/cc-lens/releases/tag/v0.4.0) into the cc-tap fork, on top of the existing raw-API inspector + Live Capture.
