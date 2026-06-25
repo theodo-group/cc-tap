@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { assembleSseMessage, parseSseEvents, type SseEvent } from '@/lib/sse'
 import type {
   AnthropicContentBlock,
   AnthropicRequestBody,
@@ -412,6 +413,14 @@ function MetaStrip({ detail }: { detail: CaptureDetail }) {
       downloadBlob(`response-${idShort}.json`, detail.response_text, 'application/json')
     }
   }
+  // Reassembled message — offered only for streaming responses that produced one.
+  const assembled = useMemo(
+    () => (s.is_streaming && detail.response_text ? assembleSseMessage(detail.response_text) : null),
+    [s.is_streaming, detail.response_text],
+  )
+  const onDownloadAssembled = () => {
+    if (assembled) downloadBlob(`response-${idShort}.assembled.json`, JSON.stringify(assembled, null, 2), 'application/json')
+  }
 
   return (
     <Card>
@@ -445,6 +454,18 @@ function MetaStrip({ detail }: { detail: CaptureDetail }) {
             <Download className="h-3 w-3" />
             {s.is_streaming ? 'Response SSE' : 'Response JSON'}
           </Button>
+          {assembled && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onDownloadAssembled}
+              className="h-7 gap-1.5 text-xs"
+            >
+              <Download className="h-3 w-3" />
+              Response Assembled
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -496,23 +517,125 @@ function Stat({
   )
 }
 
-// ─── thinking card (response) ────────────────────────────────────────────────
+// ─── response card ───────────────────────────────────────────────────────────
+
+function PreBlock({ text }: { text: string }) {
+  const clipped = text.length > 200_000 ? text.slice(0, 200_000) + '\n…[truncated]' : text
+  return (
+    <pre className="max-h-96 overflow-auto rounded-md bg-muted/40 p-3 text-xs whitespace-pre font-mono">
+      {clipped}
+    </pre>
+  )
+}
+
+/** Pretty-printed SSE: one block per event, padding trimmed, pings collapsed. */
+function RawSseView({ events }: { events: SseEvent[] }) {
+  const rows: React.ReactNode[] = []
+  let pingRun = 0
+  const flushPings = (key: string) => {
+    if (pingRun > 0) {
+      rows.push(
+        <div key={key} className="px-3 py-1 text-xs text-muted-foreground/60">· ping ×{pingRun}</div>,
+      )
+      pingRun = 0
+    }
+  }
+  events.forEach((ev, i) => {
+    if (ev.event === 'ping') { pingRun++; return }
+    flushPings(`ping-${i}`)
+    rows.push(
+      <div key={i} className="border-t border-border/40 px-3 py-2 first:border-t-0">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-orange-600 dark:text-orange-400">
+          {ev.event}
+        </div>
+        <pre className="mt-1 overflow-x-auto whitespace-pre font-mono text-xs text-muted-foreground">
+          {ev.parseError ? ev.raw : JSON.stringify(ev.data, null, 2)}
+        </pre>
+      </div>,
+    )
+  })
+  flushPings('ping-end')
+  return <div className="max-h-96 overflow-auto rounded-md bg-muted/40">{rows}</div>
+}
 
 function ResponseCard({ detail }: { detail: CaptureDetail }) {
-  if (!detail.response_text) return null
+  const text = detail.response_text
+  const streaming = detail.summary.is_streaming
+  const idShort = detail.summary.request_id.slice(0, 8)
+  const [view, setView] = useState<'assembled' | 'raw'>('assembled')
+
+  const assembled = useMemo(
+    () => (streaming && text ? assembleSseMessage(text) : null),
+    [streaming, text],
+  )
+  const events = useMemo(
+    () => (streaming && text ? parseSseEvents(text) : []),
+    [streaming, text],
+  )
+  // Non-streaming responses are already JSON; pretty-print when parseable.
+  const nonStreamPretty = useMemo(() => {
+    if (streaming || !text) return null
+    try { return JSON.stringify(JSON.parse(text), null, 2) } catch { return null }
+  }, [streaming, text])
+
+  if (!text) return null
+
+  const downloadAssembled = () => {
+    if (assembled) downloadBlob(`response-${idShort}.assembled.json`, JSON.stringify(assembled, null, 2), 'application/json')
+  }
+
+  // Assembled is only meaningful for streaming responses that yielded a message.
+  const showToggle = streaming && assembled !== null
+  const showAssembled = streaming && view === 'assembled' && assembled !== null
+
   return (
     <Card>
       <CardHeader className="pb-3">
-        <SectionHeader
-          icon={Brain}
-          title="Response"
-          subtitle={detail.summary.is_streaming ? 'raw SSE stream' : 'JSON'}
-        />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <SectionHeader
+            icon={Brain}
+            title="Response"
+            subtitle={streaming ? (showAssembled ? 'assembled message' : 'raw SSE stream') : 'JSON'}
+          />
+          <div className="flex items-center gap-2">
+            {showToggle && (
+              <div className="flex rounded-md border border-border p-0.5">
+                {(['assembled', 'raw'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setView(v)}
+                    className={cn(
+                      'rounded px-2 py-0.5 text-xs transition-colors',
+                      view === v ? 'bg-primary text-black font-medium' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {v === 'assembled' ? 'Assembled' : 'Raw SSE'}
+                  </button>
+                ))}
+              </div>
+            )}
+            {showAssembled && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={downloadAssembled}
+                className="h-7 gap-1.5 text-xs"
+              >
+                <Download className="h-3 w-3" />
+                Assembled JSON
+              </Button>
+            )}
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
-        <pre className="max-h-96 overflow-auto rounded-md bg-muted/40 p-3 text-xs whitespace-pre-wrap break-words font-mono">
-          {detail.response_text.length > 50_000 ? detail.response_text.slice(0, 50_000) + '\n…[truncated]' : detail.response_text}
-        </pre>
+        {showAssembled
+          ? <PreBlock text={JSON.stringify(assembled, null, 2)} />
+          : streaming
+            ? <RawSseView events={events} />
+            : <PreBlock text={nonStreamPretty ?? text} />}
       </CardContent>
     </Card>
   )
