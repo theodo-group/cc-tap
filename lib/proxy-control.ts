@@ -102,7 +102,10 @@ export async function startProxy(): Promise<ProxyState> {
     throw new Error('proxy/server.js not found in cwd or ~/.cc-lens/')
   }
 
-  const child = spawn(process.execPath, [script], {
+  // --disable-warning=ExperimentalWarning: the proxy uses node:sqlite, which
+  // prints an ExperimentalWarning to stderr on load. Suppress it so it doesn't
+  // surface as a spurious error in the proxy's logs.
+  const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', script], {
     detached: true,
     stdio: 'ignore',
     env: { ...process.env, CC_LENS_PROXY_PORT: String(port) },

@@ -93,7 +93,10 @@ function requireStandaloneBuild() {
 /** Boot the standalone server silently on a free loopback port. */
 async function startSilentServer() {
   const port = await findFreePort(49500)
-  const child = spawn(process.execPath, [SERVER_JS], {
+  // --disable-warning=ExperimentalWarning: the app reads the inspector DB via
+  // node:sqlite, which emits an ExperimentalWarning on load. Suppress it so the
+  // silent server doesn't leak the warning into stdout/stderr we parse below.
+  const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', SERVER_JS], {
     cwd: path.dirname(SERVER_JS),
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, PORT: String(port), HOSTNAME: '127.0.0.1', NODE_ENV: 'production' },
@@ -256,7 +259,10 @@ async function main() {
   console.log(`  ${DIM}Starting server on${R} ${O2}${B}${url}${R}`)
   console.log(`  ${DIM}Inspector proxy is launched on demand from the dashboard.${R}\n`)
 
-  const child = spawn(process.execPath, [SERVER_JS], {
+  // --disable-warning=ExperimentalWarning: the app reads the inspector DB via
+  // node:sqlite, which emits an ExperimentalWarning on load. Suppress it so it
+  // doesn't print above the dashboard's own startup output.
+  const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', SERVER_JS], {
     cwd: path.dirname(SERVER_JS),
     stdio: [process.platform === 'win32' ? 'ignore' : 'inherit', 'pipe', 'pipe'],
     env: { ...process.env, PORT: String(port), HOSTNAME: hostname, NODE_ENV: 'production' },

@@ -31,9 +31,8 @@ if (fs.existsSync(staticSrc)) {
 if (fs.existsSync(publicSrc)) {
   fs.cpSync(publicSrc, publicDst, { recursive: true, force: true })
 }
-// Ship the full proxy dir (server.js + schema.sql). better-sqlite3 is kept
-// external (see next.config.ts), so it lands in standalone/node_modules and
-// the spawned proxy resolves it from there.
+// Ship the full proxy dir (server.js + schema.sql). The proxy uses Node's
+// built-in node:sqlite, so there's no native module to copy or resolve.
 if (fs.existsSync(proxySrc)) {
   fs.cpSync(proxySrc, proxyDst, { recursive: true, force: true })
 }

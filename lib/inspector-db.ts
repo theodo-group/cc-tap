@@ -2,23 +2,22 @@ import path from 'path'
 import os from 'os'
 import fs from 'fs'
 import zlib from 'zlib'
-import type Database from 'better-sqlite3'
+import { DatabaseSync } from 'node:sqlite'
 import type { CaptureRow, CaptureSummary, CaptureDetail, AnthropicRequestBody } from '@/types/inspector'
 
 const ROOT = path.join(os.homedir(), '.cc-lens')
 const DB_PATH = path.join(ROOT, 'inspector.db')
 const PAYLOADS_DIR = path.join(ROOT, 'payloads')
 
-let _db: Database.Database | null = null
+let _db: DatabaseSync | null = null
 
-function getDb(): Database.Database | null {
+function getDb(): DatabaseSync | null {
   if (_db) return _db
+  // A readOnly open on a missing file throws, so bail early and treat the
+  // inspector as absent until the proxy has created the DB.
   if (!fs.existsSync(DB_PATH)) return null
-  // dynamic require so the module loads cleanly even when better-sqlite3 native is missing
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const Database = require('better-sqlite3') as typeof import('better-sqlite3')
-  _db = new Database(DB_PATH, { readonly: true, fileMustExist: true })
-  _db.pragma('journal_mode = WAL')
+  _db = new DatabaseSync(DB_PATH, { readOnly: true })
+  _db.exec('PRAGMA journal_mode = WAL')
   return _db
 }
 
@@ -55,10 +54,8 @@ export function listCapturesBySession(sessionId: string, limit = 500): CaptureSu
   const db = getDb()
   if (!db) return []
   const rows = db
-    .prepare<[string, number]>(
-      `SELECT * FROM captures WHERE session_id = ? ORDER BY timestamp ASC LIMIT ?`,
-    )
-    .all(sessionId, limit) as CaptureRow[]
+    .prepare(`SELECT * FROM captures WHERE session_id = ? ORDER BY timestamp ASC LIMIT ?`)
+    .all(sessionId, limit) as unknown as CaptureRow[]
   return rows.map(rowToSummary)
 }
 
@@ -66,8 +63,8 @@ export function listRecentCaptures(limit = 100): CaptureSummary[] {
   const db = getDb()
   if (!db) return []
   const rows = db
-    .prepare<[number]>(`SELECT * FROM captures ORDER BY timestamp DESC LIMIT ?`)
-    .all(limit) as CaptureRow[]
+    .prepare(`SELECT * FROM captures ORDER BY timestamp DESC LIMIT ?`)
+    .all(limit) as unknown as CaptureRow[]
   return rows.map(rowToSummary)
 }
 
@@ -75,7 +72,7 @@ export function getCapture(requestId: string): CaptureDetail | null {
   const db = getDb()
   if (!db) return null
   const row = db
-    .prepare<[string]>(`SELECT * FROM captures WHERE request_id = ?`)
+    .prepare(`SELECT * FROM captures WHERE request_id = ?`)
     .get(requestId) as CaptureRow | undefined
   if (!row) return null
 

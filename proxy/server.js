@@ -15,7 +15,7 @@ const os = require('node:os')
 const zlib = require('node:zlib')
 const crypto = require('node:crypto')
 const { Readable } = require('node:stream')
-const Database = require('better-sqlite3')
+const { DatabaseSync } = require('node:sqlite')
 
 // ─── config ──────────────────────────────────────────────────────────────────
 
@@ -38,9 +38,9 @@ const HOP_BY_HOP = new Set([
 fs.mkdirSync(ROOT, { recursive: true })
 fs.mkdirSync(PAYLOADS_DIR, { recursive: true })
 
-const db = new Database(DB_PATH)
-db.pragma('journal_mode = WAL')
-db.pragma('synchronous = NORMAL')
+const db = new DatabaseSync(DB_PATH)
+db.exec('PRAGMA journal_mode = WAL')
+db.exec('PRAGMA synchronous = NORMAL')
 db.exec(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'))
 
 const insertStmt = db.prepare(`
