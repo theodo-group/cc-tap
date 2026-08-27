@@ -4,7 +4,7 @@ This project tracks Claude Code's local data files. Compatibility is best-effort
 
 ## Supported Runtime
 
-- Node.js 18 or newer.
+- Node.js 24 or newer (required by the built-in `node:sqlite` module).
 - npm.
 - macOS and Linux are the most-tested environments.
 - Windows is supported in the CLI and docs, but needs more broad testing.

@@ -147,7 +147,7 @@ The active config directory is shown in the CLI banner on launch.
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 24+ (the dashboard uses the built-in `node:sqlite` module)
 - Claude Code with local data in `~/.claude/`
 
 ### Development
