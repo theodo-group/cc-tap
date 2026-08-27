@@ -9,6 +9,22 @@ This project follows a simple changelog format:
 - `Fixed` for bug fixes
 - `Security` for vulnerability fixes or privacy hardening
 
+## 0.8.0
+
+Fixes `npx cc-tap` being broken at 0.7.0.
+
+### Changed
+
+- The inspector reader (`lib/inspector-db.ts`) and the proxy writer (`proxy/server.js`) now use Node's built-in `node:sqlite` (`DatabaseSync`) instead of `better-sqlite3`. No native addon means nothing for Turbopack to externalize, no platform-specific `.node` binary to ship, and no cross-platform lockfile or CI handling.
+- Dropped the `better-sqlite3` and `@types/better-sqlite3` dependencies, and removed `serverExternalPackages` from the Next config.
+- Reverted the `prepare-standalone` shim-rewrite workaround added for the native addon.
+- **Breaking:** requires Node.js 24 or newer (`node:sqlite` is unflagged there). `@types/node` bumped to `^24`.
+
+### Fixed
+
+- `npx cc-tap` failed at 0.7.0 with `Cannot find module 'better-sqlite3-<hash>'` from `/api/activity`. Turbopack externalized the native package by copying it to a hashed shim under `.next/node_modules/` and rewriting server chunks to require the hashed name; that shim resolved in a local checkout but lived outside `.next/standalone` and was never published.
+- Suppressed `node:sqlite`'s load-time `ExperimentalWarning` on every spawned Next server (`bin/cli.js`) and proxy (`lib/proxy-control.ts`).
+
 ## 0.7.0
 
 ### Added
