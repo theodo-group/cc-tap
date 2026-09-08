@@ -39,11 +39,30 @@ const ROW_HEIGHT = 32
 export const GAP_THRESHOLD_MS = 30 * 60_000
 const LABEL_WIDTH = 300
 const DURATION_WIDTH = 72
+/** extra right-column width per filter layer, for the counts */
+const COUNT_WIDTH = 40
 const MARGIN = { top: 4, right: 8, bottom: 4, left: 8 }
 /** Horizontal extent of the plot area inside the wrapper, derived from the fixed axis widths */
 const PLOT_LEFT = MARGIN.left + LABEL_WIDTH
-const PLOT_RIGHT = MARGIN.right + DURATION_WIDTH
+const plotRight = (layerCount: number) => MARGIN.right + DURATION_WIDTH + Math.min(layerCount, 4) * COUNT_WIDTH
 const DRAG_MIN_PX = 5
+
+/** One search filter drawn as thin vertical bars on the rows */
+export interface MarkLayer {
+  key: string
+  color: string
+  /** match [start, end] times (ms) per agent id; '__orchestrator' for the orchestrator */
+  byAgent: Map<string, Array<[number, number]>>
+}
+
+export interface RowMarks {
+  color: string
+  /** compressed x [start, end] of every drawn match, own and rolled-up */
+  xs: Array<[number, number]>
+  own: number
+  /** matches of hidden (collapsed) descendants, rolled into this row */
+  rolled: number
+}
 
 export interface ChartRow {
   key: string
@@ -65,6 +84,8 @@ export interface ChartRow {
   endMs: number
   /** outside the selected window */
   dim: boolean
+  /** one entry per filter layer */
+  marks: RowMarks[]
 }
 
 interface Props {
@@ -73,6 +94,7 @@ interface Props {
   window: TimeWindow | null
   /** Show only the selected window, on a linear scale */
   zoom: boolean
+  layers: MarkLayer[]
   onToggle(agentId: string): void
   onSelect(agent: AgentRun): void
   onWindowChange(w: TimeWindow | null): void
@@ -86,6 +108,7 @@ export function buildRows(
   scale: CompressedScale,
   win: TimeWindow | null,
   zoom = false,
+  layers: MarkLayer[] = [],
 ): ChartRow[] {
   const rows: ChartRow[] = []
   // In zoom mode every bar is clipped to the window and rows outside it are dropped
@@ -104,6 +127,20 @@ export function buildRows(
   for (const a of timeline.agents) {
     if (a.parent_id) children.set(a.parent_id, [...(children.get(a.parent_id) ?? []), a])
   }
+  const descendants = (id: string): string[] => (children.get(id) ?? []).flatMap(k => [k.id, ...descendants(k.id)])
+
+  /** Marks of one row: its own matches, plus those of collapsed descendants */
+  const marksFor = (agentKey: string, rolledIds: string[]): RowMarks[] =>
+    layers.map(layer => {
+      const own = (layer.byAgent.get(agentKey) ?? []).filter(([a]) => inside(a))
+      const rolled = rolledIds.flatMap(id => layer.byAgent.get(id) ?? []).filter(([a]) => inside(a))
+      return {
+        color: layer.color,
+        xs: [...own, ...rolled].map(([a, b]) => [scale.toX(clamp(a)), scale.toX(clamp(b))] as [number, number]),
+        own: own.length,
+        rolled: rolled.length,
+      }
+    })
 
   rows.push({
     key: '__orchestrator',
@@ -123,6 +160,7 @@ export function buildRows(
     startMs: start,
     endMs: end,
     dim: false,
+    marks: marksFor('__orchestrator', []),
   })
 
   const push = (a: AgentRun, depth: number) => {
@@ -146,6 +184,7 @@ export function buildRows(
       startMs: s0,
       endMs: e0,
       dim: !clip && !intersectsWindow(s0, e0, win),
+      marks: marksFor(a.id, expanded.has(a.id) ? [] : descendants(a.id)),
     })
     if (expanded.has(a.id)) for (const k of kids) push(k, depth + 1)
   }
@@ -200,6 +239,38 @@ function makeRowShape(cb: ShapeCallbacks) {
         {payload.ticks.map((t, i) => (
           <rect key={`t${i}`} x={toPx(t) - 1.5} y={barY - 3} width={3} height={barH + 6} fill={tickColor} pointerEvents="none" />
         ))}
+        {payload.marks.map((m, li) =>
+          m.xs.map(([a, b], i) => {
+            // The bar spans the call to its result; a call with no result stays 1px
+            const wpx = Math.max(1, (b - a) * px)
+            return <rect key={`m${li}-${i}`} x={toPx(a) - (wpx <= 1 ? 0.5 : 0)} y={y + 1} width={wpx} height={height - 2} fill={m.color} opacity={0.55} pointerEvents="none" />
+          }),
+        )}
+      </g>
+    )
+  }
+}
+
+/** Right column: duration, then one colored count per filter layer */
+function makeRightTick(rowsByKey: Map<string, ChartRow>) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return function RightTick(props: any) {
+    const { x, y, payload } = props as { x: number; y: number; payload: { value: string } }
+    const row = rowsByKey.get(payload.value)
+    if (!row) return null
+    return (
+      <g opacity={row.dim ? 0.4 : 1}>
+        <text x={x + 6} y={y} dy={4} fontSize={11} fill="var(--muted-foreground)" fontFamily="ui-monospace, monospace">
+          {row.durationLabel}
+        </text>
+        {row.marks.slice(0, 4).map((m, i) => {
+          const total = m.own + m.rolled
+          return (
+            <text key={i} x={x + DURATION_WIDTH + i * COUNT_WIDTH} y={y} dy={4} fontSize={11} fontFamily="ui-monospace, monospace" fill={total ? m.color : 'var(--muted-foreground)'} opacity={total ? 1 : 0.35}>
+              {m.rolled ? `${m.own}+${m.rolled}` : String(total)}
+            </text>
+          )
+        })}
       </g>
     )
   }
@@ -278,6 +349,13 @@ function HoverCard({ row, left, top }: { row: ChartRow; left: number; top: numbe
           {row.segments.length} active turns · {row.ticks.length} human prompts
         </div>
       )}
+      {row.marks.some(m => m.own + m.rolled > 0) && (
+        <div className="mt-1 flex flex-wrap gap-x-3">
+          {row.marks.map((m, i) => (m.own + m.rolled > 0) && (
+            <span key={i} style={{ color: m.color }}>{m.own + m.rolled} match{m.own + m.rolled > 1 ? 'es' : ''}{m.rolled ? ` (${m.rolled} in sub-agents)` : ''}</span>
+          ))}
+        </div>
+      )}
       {row.dim && <div className="mt-1 italic text-muted-foreground">Outside the selected window</div>}
     </div>
   )
@@ -296,7 +374,7 @@ export function describeContextEvent(e: ContextEvent): string {
 
 // ─── Chart ───────────────────────────────────────────────────────────────────
 
-export function AgentFlameChart({ timeline, expanded, window: win, zoom, onToggle, onSelect, onWindowChange }: Props) {
+export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers, onToggle, onSelect, onWindowChange }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [hoverRow, setHoverRow] = useState<ChartRow | null>(null)
   const [pointer, setPointer] = useState<{ left: number; top: number } | null>(null)
@@ -317,7 +395,9 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, onToggl
     return buildCompressedScale(intervals, GAP_THRESHOLD_MS, gapWidth)
   }, [timeline, zoomed, win])
 
-  const rows = useMemo(() => buildRows(timeline, expanded, scale, win, zoomed), [timeline, expanded, scale, win, zoomed])
+  const rows = useMemo(() => buildRows(timeline, expanded, scale, win, zoomed, layers), [timeline, expanded, scale, win, zoomed, layers])
+  const rightWidth = DURATION_WIDTH + Math.min(layers.length, 4) * COUNT_WIDTH
+  const PLOT_RIGHT = plotRight(layers.length)
   const events = useMemo(
     () => (zoomed && win ? timeline.context_events.filter(e => { const t = ms(e.timestamp); return t >= win.from && t <= win.to }) : timeline.context_events),
     [timeline, zoomed, win],
@@ -336,6 +416,7 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, onToggl
   }, [ticks, scale])
 
   const RowTick = useMemo(() => makeRowTick(rowsByKey, onToggle, onSelect), [rowsByKey, onToggle, onSelect])
+  const RightTick = useMemo(() => makeRightTick(rowsByKey), [rowsByKey])
   const RowShape = useMemo(() => makeRowShape({
     onHover: setHoverRow,
     onRowClick: row => { if (row.agent) onSelect(row.agent) },
@@ -348,7 +429,7 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, onToggl
     const plotWidth = rect.width - PLOT_LEFT - PLOT_RIGHT
     const frac = Math.min(1, Math.max(0, (px - PLOT_LEFT) / plotWidth))
     return scale.toTime(frac * scale.total)
-  }, [scale])
+  }, [scale, PLOT_RIGHT])
 
   // The hover card follows the pointer; the wrapper's own handler knows its rect
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -393,7 +474,7 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, onToggl
     window.addEventListener('mousemove', move)
     window.addEventListener('mouseup', up)
     return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up) }
-  }, [drag, onWindowChange, pxToTime])
+  }, [drag, onWindowChange, pxToTime, PLOT_RIGHT])
 
   const height = rows.length * ROW_HEIGHT + 40
   // After a drag, swallow the click that follows mouseup so rows do not open
@@ -411,7 +492,7 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, onToggl
       onClickCapture={onClickCapture}
       onMouseLeave={() => setHoverRow(null)}
     >
-      <ChartBody rows={rows} rowsByKey={rowsByKey} scale={scale} ticks={ticks} tickLabel={tickLabel} win={zoomed ? null : win} events={events} RowTick={RowTick} RowShape={RowShape} />
+      <ChartBody rows={rows} scale={scale} ticks={ticks} tickLabel={tickLabel} win={zoomed ? null : win} events={events} RowTick={RowTick} RightTick={RightTick} RowShape={RowShape} rightWidth={rightWidth} />
 
       {drag && Math.abs(drag.current - drag.start) >= DRAG_MIN_PX && (
         <div
@@ -426,8 +507,8 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, onToggl
 
 interface ChartBodyProps {
   rows: ChartRow[]
-  rowsByKey: Map<string, ChartRow>
   scale: CompressedScale
+  rightWidth: number
   ticks: ReturnType<typeof clockTicks>
   tickLabel: Map<number, string>
   win: TimeWindow | null
@@ -436,10 +517,12 @@ interface ChartBodyProps {
   RowTick: (props: any) => React.ReactElement | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   RowShape: (props: any) => React.ReactElement | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  RightTick: (props: any) => React.ReactElement | null
 }
 
 /** Memoized so that pointer tracking in the parent does not re-render Recharts */
-const ChartBody = memo(function ChartBody({ rows, rowsByKey, scale, ticks, tickLabel, win, events, RowTick, RowShape }: ChartBodyProps) {
+const ChartBody = memo(function ChartBody({ rows, scale, ticks, tickLabel, win, events, RowTick, RightTick, RowShape, rightWidth }: ChartBodyProps) {
   return (
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart layout="vertical" data={rows} margin={MARGIN} barCategoryGap={0}>
@@ -459,10 +542,9 @@ const ChartBody = memo(function ChartBody({ rows, rowsByKey, scale, ticks, tickL
             orientation="right"
             type="category"
             dataKey="key"
-            width={DURATION_WIDTH}
+            width={rightWidth}
             interval={0}
-            tickFormatter={(k: string) => rowsByKey.get(k)?.durationLabel ?? ''}
-            tick={{ fontSize: 11, fill: 'var(--muted-foreground)', fontFamily: 'ui-monospace, monospace' }}
+            tick={RightTick}
             axisLine={false}
             tickLine={false}
           />

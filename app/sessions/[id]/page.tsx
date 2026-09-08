@@ -353,7 +353,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
         {timeline && timeline.agents.length > 0 && (
           <TabsContent value="agents" className="flex-1 overflow-y-auto data-[state=inactive]:hidden">
             {tab === 'agents' && (
-              <AgentTimelineTab timeline={timeline} window={win} onWindowChange={onWindowChange} onJumpToTurn={jumpToTurn} />
+              <AgentTimelineTab sessionId={id} timeline={timeline} window={win} onWindowChange={onWindowChange} onJumpToTurn={jumpToTurn} />
             )}
           </TabsContent>
         )}

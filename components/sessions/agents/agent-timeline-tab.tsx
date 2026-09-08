@@ -1,16 +1,20 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AgentRun, AgentTimeline } from '@/types/claude'
-import { AgentFlameChart, OUTCOME_COLORS, BUSY_COLOR, TICK_COLOR, NUDGE_COLOR, CONTEXT_EVENT_STYLE, describeContextEvent } from './agent-flame-chart'
+import { AgentFlameChart, OUTCOME_COLORS, BUSY_COLOR, TICK_COLOR, NUDGE_COLOR, CONTEXT_EVENT_STYLE, describeContextEvent, type MarkLayer } from './agent-flame-chart'
 import { AgentDetailsSheet } from './agent-details-sheet'
+import { ToolFilterBar } from './tool-filter-bar'
+import { filterColor, filterKey, filtersFromSearch, filtersToSearch, useToolSearches, type ToolFilter } from '@/lib/tool-filters'
+import type { ToolMatch } from '@/lib/tool-search'
 import { Button } from '@/components/ui/button'
 import { formatDayClock, formatClock } from '@/lib/time-scale'
 import { inWindow, intersectsWindow, type TimeWindow } from '@/lib/time-window'
-import { formatCost } from '@/lib/decode'
-import { Bot, ZoomIn, ZoomOut } from 'lucide-react'
+import { formatCost, formatDurationMs } from '@/lib/decode'
+import { Bot, ZoomIn, ZoomOut, ExternalLink } from 'lucide-react'
 
 interface Props {
+  sessionId: string
   timeline: AgentTimeline
   window: TimeWindow | null
   onWindowChange(w: TimeWindow | null): void
@@ -51,11 +55,27 @@ function Legend({ hasEvents }: { hasEvents: boolean }) {
   )
 }
 
-export function AgentTimelineTab({ timeline, window: win, onWindowChange, onJumpToTurn }: Props) {
+const MATCH_LIST_PAGE = 100
+
+export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowChange, onJumpToTurn }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<AgentRun | null>(null)
   // Zoom shows only the selected window on a linear scale
   const [zoom, setZoom] = useState(true)
+
+  // ─── Tool call filters, kept in the URL (?f= / ?fr=)
+  const [filters, setFilters] = useState<ToolFilter[]>([])
+  // Read the URL once after mount; the server render has no access to the query string
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setFilters(filtersFromSearch(window.location.search)) }, [])
+  const onFiltersChange = useCallback((next: ToolFilter[]) => {
+    setFilters(next)
+    const url = `${window.location.pathname}${filtersToSearch(window.location.search, next)}${window.location.hash}`
+    window.history.replaceState(null, '', url)
+  }, [])
+  const searches = useToolSearches(sessionId, filters)
+  const [listOpen, setListOpen] = useState(true)
+  const [listLimit, setListLimit] = useState(MATCH_LIST_PAGE)
 
   const onToggle = useCallback((id: string) => {
     setExpanded(prev => {
@@ -73,6 +93,36 @@ export function AgentTimelineTab({ timeline, window: win, onWindowChange, onJump
   // Everything below respects the selected window: an agent counts when its lifetime overlaps it
   const visibleAgents = useMemo(() => timeline.agents.filter(a => intersectsWindow(a.start, a.end, win)), [timeline, win])
   const events = useMemo(() => timeline.context_events.filter(e => inWindow(e.timestamp, win)), [timeline, win])
+
+  // One layer per filter: match times per agent, restricted to the window
+  const layers = useMemo<MarkLayer[]>(() => filters.map((f, i) => {
+    const key = filterKey(f)
+    const st = searches.get(key)
+    const byAgent = new Map<string, Array<[number, number]>>()
+    if (st?.status === 'ok') {
+      for (const m of st.result.matches) {
+        if (!inWindow(m.timestamp, win)) continue
+        const k = m.agent_id ?? '__orchestrator'
+        const start = new Date(m.timestamp).getTime()
+        const end = m.end_timestamp ? Math.max(start, new Date(m.end_timestamp).getTime()) : start
+        byAgent.set(k, [...(byAgent.get(k) ?? []), [start, end]])
+      }
+    }
+    return { key, color: filterColor(i), byAgent }
+  }), [filters, searches, win])
+
+  const countsInWindow = useMemo(() => new Map(layers.map(l => [l.key, [...l.byAgent.values()].reduce((s, xs) => s + xs.length, 0)])), [layers])
+
+  // Combined match list, sorted by time, restricted to the window
+  const matchList = useMemo(() => {
+    const out: Array<ToolMatch & { color: string }> = []
+    filters.forEach((f, i) => {
+      const st = searches.get(filterKey(f))
+      if (st?.status !== 'ok') return
+      for (const m of st.result.matches) if (inWindow(m.timestamp, win)) out.push({ ...m, color: filterColor(i) })
+    })
+    return out.sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+  }, [filters, searches, win])
 
   const stats = useMemo(() => {
     const top = visibleAgents.filter(a => !a.parent_id)
@@ -127,6 +177,8 @@ export function AgentTimelineTab({ timeline, window: win, onWindowChange, onJump
 
       <Legend hasEvents={timeline.context_events.length > 0} />
 
+      <ToolFilterBar filters={filters} states={searches} countsInWindow={countsInWindow} hasWindow={!!win} onChange={onFiltersChange} />
+
       <div className="overflow-x-auto rounded-xl border border-border bg-card p-2">
         <div className="min-w-[720px]">
           <AgentFlameChart
@@ -134,12 +186,62 @@ export function AgentTimelineTab({ timeline, window: win, onWindowChange, onJump
             expanded={expanded}
             window={win}
             zoom={zoom}
+            layers={layers}
             onToggle={onToggle}
             onSelect={onSelect}
             onWindowChange={onWindowChange}
           />
         </div>
       </div>
+
+      {filters.length > 0 && (
+        <div className="rounded-xl border border-border bg-card px-4 py-3">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between text-left text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+            onClick={() => setListOpen(o => !o)}
+          >
+            <span>Matches · {matchList.length}{win ? ' in the selected window' : ''}</span>
+            <span>{listOpen ? '▾' : '▸'}</span>
+          </button>
+          {listOpen && (
+            <ul className="mt-2 divide-y divide-border/60 text-sm">
+              {matchList.length === 0 && <li className="py-2 text-muted-foreground">No matching tool call.</li>}
+              {matchList.slice(0, listLimit).map(m => {
+                const agent = m.agent_id ? parents.get(m.agent_id) : undefined
+                const open = () => {
+                  if (!m.agent_id) onJumpToTurn?.(m.turn_uuid)
+                  else if (agent) setSelected(agent)
+                }
+                return (
+                  <li key={`${m.tool_use_id}-${m.color}`} className="flex items-baseline gap-3 py-1.5">
+                    <span className="mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: m.color }} />
+                    <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+                      {formatDayClock(new Date(m.timestamp).getTime())}
+                      {m.end_timestamp && <span className="text-muted-foreground/60"> · {formatDurationMs(Math.max(0, new Date(m.end_timestamp).getTime() - new Date(m.timestamp).getTime()))}</span>}
+                    </span>
+                    <button type="button" onClick={open} className="shrink-0 max-w-48 truncate text-left text-xs hover:underline" title={agent?.description ?? 'Orchestrator'}>
+                      {agent?.description ?? m.agent_description ?? 'Orchestrator'}
+                    </button>
+                    <span className="shrink-0 rounded border border-border px-1 font-mono text-[10px] text-muted-foreground">{m.tool}{m.in_result ? ' · result' : ''}{m.is_error ? ' · error' : ''}</span>
+                    <span className="min-w-0 flex-1 truncate font-mono text-xs" title={m.snippet}>{m.snippet}</span>
+                    <button type="button" onClick={open} className="shrink-0 text-muted-foreground hover:text-foreground" aria-label="Open">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                )
+              })}
+              {matchList.length > listLimit && (
+                <li className="py-2">
+                  <Button variant="ghost" size="sm" onClick={() => setListLimit(n => n + MATCH_LIST_PAGE)}>
+                    Show {Math.min(MATCH_LIST_PAGE, matchList.length - listLimit)} more of {matchList.length - listLimit}
+                  </Button>
+                </li>
+              )}
+            </ul>
+          )}
+        </div>
+      )}
 
       {events.length > 0 && (
         <div className="rounded-xl border border-border bg-card px-4 py-3">
