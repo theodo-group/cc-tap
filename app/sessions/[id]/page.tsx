@@ -1,6 +1,6 @@
 'use client'
 
-import { use } from 'react'
+import { use, useEffect, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { TopBar } from '@/components/layout/top-bar'
 import { SessionSidebar } from '@/components/sessions/replay/session-sidebar'
@@ -8,13 +8,14 @@ import { UserTurnCard, AssistantTurnCard } from '@/components/sessions/replay/tu
 import { TokenAccumulationChart } from '@/components/sessions/replay/token-accumulation-chart'
 import { SessionBadges } from '@/components/sessions/session-badges'
 import { formatCost, formatTokens, formatDuration, projectDisplayName } from '@/lib/decode'
-import type { ReplayData, SessionWithFacet } from '@/types/claude'
+import type { AgentTimeline, ReplayData, SessionWithFacet } from '@/types/claude'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RawApiTab } from '@/components/sessions/raw-api/raw-api-tab'
-import { AlertTriangle, MessageSquare, Coins, DollarSign, Clock, Zap, Radio } from 'lucide-react'
+import { AgentTimelineTab } from '@/components/sessions/agents/agent-timeline-tab'
+import { AlertTriangle, MessageSquare, Coins, DollarSign, Clock, Zap, Radio, Bot } from 'lucide-react'
 
 const fetcher = (url: string) =>
   fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
@@ -31,6 +32,31 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
     useSWR<{ session: SessionWithFacet }>(`/api/sessions/${id}`, fetcher)
 
   const meta = metaData?.session
+
+  const { data: timeline } = useSWR<AgentTimeline>(`/api/sessions/${id}/agents`, fetcher, {
+    // Keep polling while an agent is still running
+    refreshInterval: latest => (latest?.agents.some(a => a.outcome === 'running') ? 10_000 : 0),
+  })
+  const agentCount = timeline?.agents.filter(a => !a.parent_id).length ?? 0
+
+  const [tab, setTab] = useState('replay')
+  const jumpRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (tab !== 'replay' || !jumpRef.current) return
+    const uuid = jumpRef.current
+    jumpRef.current = null
+    let el: HTMLElement | null = null
+    // Wait for the details sheet to close and the tab panel to lay out
+    const t1 = setTimeout(() => {
+      el = document.getElementById(`turn-${uuid}`)
+      if (!el) return
+      el.scrollIntoView({ block: 'center' })
+      el.classList.add('ring-2', 'ring-primary', 'rounded-xl')
+    }, 400)
+    const t2 = setTimeout(() => el?.classList.remove('ring-2', 'ring-primary', 'rounded-xl'), 3500)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [tab])
+  const jumpToTurn = (uuid: string) => { jumpRef.current = uuid; setTab('replay') }
 
   if (replayError) {
     return (
@@ -198,14 +224,21 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
         )}
       </div>
 
-      {/* Tabs: Replay (default) | Raw API */}
-      <Tabs defaultValue="replay" className="flex flex-1 flex-col overflow-hidden">
+      {/* Tabs: Replay (default) | Agents | Raw API */}
+      <Tabs value={tab} onValueChange={setTab} className="flex flex-1 flex-col overflow-hidden">
         <div className="border-b border-border px-4 pt-2">
           <TabsList variant="line">
             <TabsTrigger value="replay" className="gap-2">
               <MessageSquare className="h-4 w-4" />
               Replay
             </TabsTrigger>
+            {agentCount > 0 && (
+              <TabsTrigger value="agents" className="gap-2">
+                <Bot className="h-4 w-4" />
+                Agents
+                <span className="rounded-full bg-muted px-1.5 text-[10px] tabular-nums text-muted-foreground">{agentCount}</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="raw" className="gap-2">
               <Radio className="h-4 w-4" />
               Raw API
@@ -223,25 +256,27 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
 
                 if (turn.type === 'user') {
                   return (
-                    <UserTurnCard
-                      key={turn.uuid || i}
-                      turn={turn}
-                      turnNumber={i + 1}
-                      compactionBefore={compactionBefore}
-                      toolResults={toolResults}
-                    />
+                    <div key={turn.uuid || i} id={`turn-${turn.uuid}`}>
+                      <UserTurnCard
+                        turn={turn}
+                        turnNumber={i + 1}
+                        compactionBefore={compactionBefore}
+                        toolResults={toolResults}
+                      />
+                    </div>
                   )
                 }
 
                 assistantTurnNum++
                 return (
-                  <AssistantTurnCard
-                    key={turn.uuid || i}
-                    turn={turn}
-                    turnNumber={assistantTurnNum}
-                    compactionBefore={compactionBefore}
-                    toolResults={toolResults}
-                  />
+                  <div key={turn.uuid || i} id={`turn-${turn.uuid}`}>
+                    <AssistantTurnCard
+                      turn={turn}
+                      turnNumber={assistantTurnNum}
+                      compactionBefore={compactionBefore}
+                      toolResults={toolResults}
+                    />
+                  </div>
                 )
               })}
             </div>
@@ -257,6 +292,12 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
             <TokenAccumulationChart turns={replay.turns} compactions={replay.compactions} />
           </div>
         </TabsContent>
+
+        {timeline && agentCount > 0 && (
+          <TabsContent value="agents" className="flex-1 overflow-y-auto data-[state=inactive]:hidden">
+            {tab === 'agents' && <AgentTimelineTab timeline={timeline} onJumpToTurn={jumpToTurn} />}
+          </TabsContent>
+        )}
 
         <TabsContent value="raw" className="flex-1 overflow-y-auto data-[state=inactive]:hidden">
           <RawApiTab sessionId={id} />
