@@ -132,15 +132,6 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
     return { top: top.length, total: visibleAgents.length, cost, failed, running }
   }, [visibleAgents])
 
-  if (timeline.agents.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-2 py-20 text-center text-muted-foreground">
-        <Bot className="h-8 w-8" />
-        <p className="text-sm">No sub-agent transcripts were found for this session.</p>
-      </div>
-    )
-  }
-
   const start = win?.from ?? new Date(timeline.start).getTime()
   const end = win?.to ?? new Date(timeline.end).getTime()
   const sameDay = new Date(start).toDateString() === new Date(end).toDateString()
@@ -149,7 +140,10 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
     <div className="flex flex-col gap-4 px-4 py-5 md:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm">
-          <span className="font-medium">{stats.top} agents</span>
+          {timeline.agents.length === 0 && (
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground"><Bot className="h-4 w-4" /> No sub-agents in this session</span>
+          )}
+          {timeline.agents.length > 0 && <span className="font-medium">{stats.top} agents</span>}
           {stats.total > stats.top && <span className="text-muted-foreground"> · {stats.total - stats.top} sub-agents</span>}
           {stats.failed > 0 && <span style={{ color: OUTCOME_COLORS.failed }}> · {stats.failed} failed</span>}
           {stats.running > 0 && <span style={{ color: OUTCOME_COLORS.running }}> · {stats.running} running</span>}

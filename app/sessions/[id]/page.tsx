@@ -275,11 +275,13 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
               <MessageSquare className="h-4 w-4" />
               Replay
             </TabsTrigger>
-            {(timeline?.agents.length ?? 0) > 0 && (
+            {timeline && (
               <TabsTrigger value="agents" className="gap-2">
                 <Bot className="h-4 w-4" />
                 Agents
-                <span className="rounded-full bg-muted px-1.5 text-[10px] tabular-nums text-muted-foreground">{agentCount}</span>
+                {agentCount > 0 && (
+                  <span className="rounded-full bg-muted px-1.5 text-[10px] tabular-nums text-muted-foreground">{agentCount}</span>
+                )}
               </TabsTrigger>
             )}
             <TabsTrigger value="raw" className="gap-2">
@@ -350,7 +352,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </TabsContent>
 
-        {timeline && timeline.agents.length > 0 && (
+        {timeline && (
           <TabsContent value="agents" className="flex-1 overflow-y-auto data-[state=inactive]:hidden">
             {tab === 'agents' && (
               <AgentTimelineTab sessionId={id} timeline={timeline} window={win} onWindowChange={onWindowChange} onJumpToTurn={jumpToTurn} />
