@@ -329,11 +329,12 @@ function formatClockSeconds(time: number): string {
   return `${formatDayClock(time)}:${String(d.getSeconds()).padStart(2, '0')}`
 }
 
+/** Positioned in the viewport, so a short chart or a scrolling container never clips it */
 function HoverCard({ row, left, top, cursorTime }: { row: ChartRow; left: number; top: number; cursorTime: number | null }) {
   const a = row.agent
   return (
     <div
-      className="pointer-events-none absolute z-10 w-[270px] rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-md"
+      className="pointer-events-none fixed z-50 w-[270px] rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-md"
       style={{ left, top }}
     >
       {cursorTime != null && (
@@ -445,9 +446,10 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers,
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const px = e.clientX - rect.left
+    // Viewport coordinates for the fixed hover card, kept inside the window
     setPointer({
-      left: Math.max(0, Math.min(px + 14, rect.width - 280)),
-      top: e.clientY - rect.top + 14,
+      left: Math.max(8, Math.min(e.clientX + 14, window.innerWidth - 286)),
+      top: e.clientY + 14 > window.innerHeight - 140 ? e.clientY - 14 - 120 : e.clientY + 14,
     })
     if (px >= PLOT_LEFT && px <= rect.width - PLOT_RIGHT) setCursor({ px, time: pxToTime(px, rect) })
     else setCursor(null)
