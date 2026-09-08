@@ -6,11 +6,14 @@ import { AgentFlameChart, OUTCOME_COLORS, BUSY_COLOR, TICK_COLOR, NUDGE_COLOR, C
 import { AgentDetailsSheet } from './agent-details-sheet'
 import { Button } from '@/components/ui/button'
 import { formatDayClock, formatClock } from '@/lib/time-scale'
+import { inWindow, intersectsWindow, type TimeWindow } from '@/lib/time-window'
 import { formatCost } from '@/lib/decode'
 import { Bot } from 'lucide-react'
 
 interface Props {
   timeline: AgentTimeline
+  window: TimeWindow | null
+  onWindowChange(w: TimeWindow | null): void
   onJumpToTurn?(uuid: string): void
 }
 
@@ -48,7 +51,7 @@ function Legend({ hasEvents }: { hasEvents: boolean }) {
   )
 }
 
-export function AgentTimelineTab({ timeline, onJumpToTurn }: Props) {
+export function AgentTimelineTab({ timeline, window: win, onWindowChange, onJumpToTurn }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<AgentRun | null>(null)
 
@@ -65,15 +68,17 @@ export function AgentTimelineTab({ timeline, onJumpToTurn }: Props) {
   const parents = useMemo(() => new Map(timeline.agents.map(a => [a.id, a])), [timeline])
   const expandable = useMemo(() => timeline.agents.filter(a => a.children_count > 0).map(a => a.id), [timeline])
 
-  const events = timeline.context_events
+  // Everything below respects the selected window: an agent counts when its lifetime overlaps it
+  const visibleAgents = useMemo(() => timeline.agents.filter(a => intersectsWindow(a.start, a.end, win)), [timeline, win])
+  const events = useMemo(() => timeline.context_events.filter(e => inWindow(e.timestamp, win)), [timeline, win])
 
   const stats = useMemo(() => {
-    const top = timeline.agents.filter(a => !a.parent_id)
-    const cost = timeline.agents.reduce((s, a) => s + a.estimated_cost, 0)
-    const failed = timeline.agents.filter(a => a.outcome === 'failed' || a.outcome === 'killed').length
-    const running = timeline.agents.filter(a => a.outcome === 'running').length
-    return { top: top.length, total: timeline.agents.length, cost, failed, running }
-  }, [timeline])
+    const top = visibleAgents.filter(a => !a.parent_id)
+    const cost = visibleAgents.reduce((s, a) => s + a.estimated_cost, 0)
+    const failed = visibleAgents.filter(a => a.outcome === 'failed' || a.outcome === 'killed').length
+    const running = visibleAgents.filter(a => a.outcome === 'running').length
+    return { top: top.length, total: visibleAgents.length, cost, failed, running }
+  }, [visibleAgents])
 
   if (timeline.agents.length === 0) {
     return (
@@ -84,8 +89,8 @@ export function AgentTimelineTab({ timeline, onJumpToTurn }: Props) {
     )
   }
 
-  const start = new Date(timeline.start).getTime()
-  const end = new Date(timeline.end).getTime()
+  const start = win?.from ?? new Date(timeline.start).getTime()
+  const end = win?.to ?? new Date(timeline.end).getTime()
   const sameDay = new Date(start).toDateString() === new Date(end).toDateString()
 
   return (
@@ -97,6 +102,7 @@ export function AgentTimelineTab({ timeline, onJumpToTurn }: Props) {
           {stats.failed > 0 && <span style={{ color: OUTCOME_COLORS.failed }}> · {stats.failed} failed</span>}
           {stats.running > 0 && <span style={{ color: OUTCOME_COLORS.running }}> · {stats.running} running</span>}
           <span className="text-muted-foreground"> · agents cost {formatCost(stats.cost)}</span>
+          {win && <span className="text-muted-foreground"> · in the selected window</span>}
           <span className="ml-3 font-mono text-xs uppercase tracking-widest text-muted-foreground">
             {formatDayClock(start)} → {sameDay ? formatClock(end) : formatDayClock(end)}
           </span>
@@ -116,8 +122,10 @@ export function AgentTimelineTab({ timeline, onJumpToTurn }: Props) {
           <AgentFlameChart
             timeline={timeline}
             expanded={expanded}
+            window={win}
             onToggle={onToggle}
             onSelect={onSelect}
+            onWindowChange={onWindowChange}
           />
         </div>
       </div>
@@ -125,7 +133,7 @@ export function AgentTimelineTab({ timeline, onJumpToTurn }: Props) {
       {events.length > 0 && (
         <div className="rounded-xl border border-border bg-card px-4 py-3">
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Context management
+            Context management{win ? ' · in the selected window' : ''}
           </h3>
           <ul className="space-y-1 text-sm">
             {events.map(e => {

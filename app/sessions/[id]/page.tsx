@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useEffect, useRef, useState } from 'react'
+import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { TopBar } from '@/components/layout/top-bar'
 import { SessionSidebar } from '@/components/sessions/replay/session-sidebar'
@@ -15,6 +15,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RawApiTab } from '@/components/sessions/raw-api/raw-api-tab'
 import { AgentTimelineTab } from '@/components/sessions/agents/agent-timeline-tab'
+import { TimeWindowBar } from '@/components/sessions/time-window-bar'
+import { inWindow, intersectsWindow, windowFromSearch, windowToSearch, type TimeWindow } from '@/lib/time-window'
 import { AlertTriangle, MessageSquare, Coins, DollarSign, Clock, Zap, Radio, Bot, Undo2 } from 'lucide-react'
 
 const fetcher = (url: string) =>
@@ -37,7 +39,35 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
     // Keep polling while an agent is still running
     refreshInterval: latest => (latest?.agents.some(a => a.outcome === 'running') ? 10_000 : 0),
   })
-  const agentCount = timeline?.agents.filter(a => !a.parent_id).length ?? 0
+  // ─── Selected time window, kept in the URL (?from=&to=) so it can be shared
+  const [win, setWin] = useState<TimeWindow | null>(null)
+  // Read the URL once after mount; the server render has no access to the query string
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setWin(windowFromSearch(window.location.search)) }, [])
+  const onWindowChange = useCallback((w: TimeWindow | null) => {
+    setWin(w)
+    const url = `${window.location.pathname}${windowToSearch(window.location.search, w)}${window.location.hash}`
+    window.history.replaceState(null, '', url)
+  }, [])
+
+  const agentCount = timeline?.agents.filter(a => !a.parent_id && intersectsWindow(a.start, a.end, win)).length ?? 0
+
+  const view = useMemo<ReplayData | null>(() => {
+    if (!replayData) return null
+    if (!win) return replayData
+    const keep = new Set<string>()
+    const turns = replayData.turns.filter(t => { const ok = inWindow(t.timestamp, win); if (ok) keep.add(t.uuid); return ok })
+    // Compactions keep their position relative to the turn they preceded
+    const compactions = replayData.compactions
+      .filter(c => inWindow(c.timestamp, win))
+      .map(c => {
+        const before = replayData.turns[c.turn_index]
+        const idx = before ? turns.findIndex(t => t.uuid === before.uuid) : -1
+        return { ...c, turn_index: idx >= 0 ? idx : turns.length }
+      })
+    const total_cost = turns.reduce((s, t) => s + (t.estimated_cost ?? 0), 0)
+    return { ...replayData, turns, compactions, total_cost }
+  }, [replayData, win])
 
   const [tab, setTab] = useState('replay')
   const jumpRef = useRef<string | null>(null)
@@ -72,7 +102,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
     )
   }
 
-  if (replayLoading || !replayData) {
+  if (replayLoading || !replayData || !view) {
     return (
       <div className="flex flex-col min-h-screen">
         <TopBar title="Session Replay" subtitle="Loading…" />
@@ -90,10 +120,10 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
     )
   }
 
-  const replay = replayData
   const projectName = meta ? projectDisplayName(meta.project_path ?? '') : id.slice(0, 8)
 
-  // Total token counts from replay
+  // Every metric below is computed on `view`: the replay restricted to the selected window
+  const replay = view
   let totalInput = 0, totalOutput = 0, totalCacheRead = 0, totalCacheWrite = 0
   for (const t of replay.turns) {
     if (t.usage) {
@@ -105,6 +135,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
   }
   const totalTokens = totalInput + totalOutput + totalCacheWrite + totalCacheRead
   const discardedTurns = replay.turns.filter(t => t.type === 'assistant' && t.discarded).length
+  const durationMinutes = win ? (win.to - win.from) / 60_000 : (meta?.duration_minutes ?? 0)
 
   // Build tool results map: tool_use_id -> result (from user turns)
   const toolResults = new Map<string, { content: string; is_error: boolean }>()
@@ -126,14 +157,23 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
       {/* Header */}
       <TopBar
         title={replay.ai_title ?? `${projectName} · ${replay.slug ?? id.slice(0, 8)}`}
-        subtitle={`${projectName} · ${replay.git_branch ?? '?'} · v${replay.version ?? '?'} · ${formatCost(replay.total_cost ?? 0)}`}
+        subtitle={`${projectName} · ${replay.git_branch ?? '?'} · v${replay.version ?? '?'} · ${formatCost(replayData.total_cost ?? 0)}`}
       />
 
       {/* Stats cards — match project detail page */}
       <div className="border-b border-border bg-muted/30 px-4 py-4 md:px-6">
+        <div className="mb-4">
+          <TimeWindowBar
+            window={win}
+            onChange={onWindowChange}
+            timeline={timeline}
+            sessionStart={timeline ? new Date(timeline.start).getTime() : undefined}
+            sessionEnd={timeline ? new Date(timeline.end).getTime() : undefined}
+          />
+        </div>
         <div
           className={
-            3 + (meta ? 1 : 0) + (replay.compactions.length > 0 ? 1 : 0) >= 5
+            3 + (meta || win ? 1 : 0) + (replay.compactions.length > 0 ? 1 : 0) >= 5
               ? 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5'
               : 'grid grid-cols-2 gap-4 sm:grid-cols-4'
           }
@@ -176,22 +216,22 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">Estimated spend</p>
+              <p className="text-xs text-muted-foreground">{win ? 'Estimated spend in window' : 'Estimated spend'}</p>
             </CardContent>
           </Card>
 
-          {meta && (
+          {(meta || win) && (
             <Card className="gap-0">
               <CardHeader className="pb-2">
                 <CardDescription className="flex items-center gap-2">
                   <Clock className="h-4 w-4" /> Duration
                 </CardDescription>
                 <CardTitle className="text-3xl font-bold tabular-nums">
-                  {formatDuration(meta.duration_minutes ?? 0)}
+                  {formatDuration(durationMinutes)}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-muted-foreground">Session span</p>
+                <p className="text-xs text-muted-foreground">{win ? 'Selected window' : 'Session span'}</p>
               </CardContent>
             </Card>
           )}
@@ -235,7 +275,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
               <MessageSquare className="h-4 w-4" />
               Replay
             </TabsTrigger>
-            {agentCount > 0 && (
+            {(timeline?.agents.length ?? 0) > 0 && (
               <TabsTrigger value="agents" className="gap-2">
                 <Bot className="h-4 w-4" />
                 Agents
@@ -254,6 +294,9 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
           <div className="flex flex-1 overflow-hidden">
             {/* Conversation replay */}
             <div className="flex-1 min-w-0 overflow-y-auto px-4 py-6 max-w-6xl">
+              {win && replay.turns.length === 0 && (
+                <p className="py-10 text-center text-sm text-muted-foreground">No turns in the selected window.</p>
+              )}
               {replay.turns.map((turn, i) => {
                 const compactionBefore = compactionByTurnIndex.get(i)
                 const startsDiscarded = turn.discarded && !replay.turns[i - 1]?.discarded
@@ -307,9 +350,11 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </TabsContent>
 
-        {timeline && agentCount > 0 && (
+        {timeline && timeline.agents.length > 0 && (
           <TabsContent value="agents" className="flex-1 overflow-y-auto data-[state=inactive]:hidden">
-            {tab === 'agents' && <AgentTimelineTab timeline={timeline} onJumpToTurn={jumpToTurn} />}
+            {tab === 'agents' && (
+              <AgentTimelineTab timeline={timeline} window={win} onWindowChange={onWindowChange} onJumpToTurn={jumpToTurn} />
+            )}
           </TabsContent>
         )}
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ComposedChart,
   Bar,
@@ -12,6 +12,7 @@ import {
 } from 'recharts'
 import type { AgentRun, AgentOutcome, AgentTimeline, ContextEvent, ContextEventType } from '@/types/claude'
 import { buildCompressedScale, clockTicks, formatClock, formatDayClock, type CompressedScale } from '@/lib/time-scale'
+import { intersectsWindow, normalizeWindow, timelineIntervals, type TimeWindow } from '@/lib/time-window'
 import { formatDurationMs, formatTokens } from '@/lib/decode'
 
 export const OUTCOME_COLORS: Record<AgentOutcome, string> = {
@@ -26,6 +27,7 @@ export const TICK_COLOR = '#e0824b'
 /** SendMessage calls received by an agent from its launcher */
 export const NUDGE_COLOR = '#a78bfa'
 export const BASE_COLOR = 'var(--muted)'
+export const WINDOW_COLOR = 'var(--primary)'
 
 export const CONTEXT_EVENT_STYLE: Record<ContextEventType, { color: string; glyph: string; label: string }> = {
   compact: { color: '#f59e0b', glyph: '⚡', label: 'Compaction' },
@@ -38,6 +40,10 @@ export const GAP_THRESHOLD_MS = 30 * 60_000
 const LABEL_WIDTH = 300
 const DURATION_WIDTH = 72
 const MARGIN = { top: 4, right: 8, bottom: 4, left: 8 }
+/** Horizontal extent of the plot area inside the wrapper, derived from the fixed axis widths */
+const PLOT_LEFT = MARGIN.left + LABEL_WIDTH
+const PLOT_RIGHT = MARGIN.right + DURATION_WIDTH
+const DRAG_MIN_PX = 5
 
 export interface ChartRow {
   key: string
@@ -57,13 +63,17 @@ export interface ChartRow {
   durationLabel: string
   startMs: number
   endMs: number
+  /** outside the selected window */
+  dim: boolean
 }
 
 interface Props {
   timeline: AgentTimeline
   expanded: Set<string>
+  window: TimeWindow | null
   onToggle(agentId: string): void
   onSelect(agent: AgentRun): void
+  onWindowChange(w: TimeWindow | null): void
 }
 
 const ms = (iso: string) => new Date(iso).getTime()
@@ -72,6 +82,7 @@ export function buildRows(
   timeline: AgentTimeline,
   expanded: Set<string>,
   scale: CompressedScale,
+  win: TimeWindow | null,
 ): ChartRow[] {
   const rows: ChartRow[] = []
   const start = ms(timeline.start)
@@ -96,6 +107,7 @@ export function buildRows(
     durationLabel: formatDurationMs(end - start),
     startMs: start,
     endMs: end,
+    dim: false,
   })
 
   const push = (a: AgentRun, depth: number) => {
@@ -116,6 +128,7 @@ export function buildRows(
       durationLabel: formatDurationMs(a.duration_ms),
       startMs: s,
       endMs: e,
+      dim: !intersectsWindow(s, e, win),
     })
     if (expanded.has(a.id)) for (const k of kids) push(k, depth + 1)
   }
@@ -145,6 +158,7 @@ function makeRowShape(cb: ShapeCallbacks) {
     const barY = y + (height - barH) / 2
     const w = Math.max(width, 3)
     const toPx = (v: number) => x + (v - x0) * px
+    const opacity = payload.dim ? 0.25 : 1
     const tickColor = payload.kind === 'orchestrator' ? TICK_COLOR : NUDGE_COLOR
     const running = payload.agent?.outcome === 'running'
 
@@ -154,7 +168,7 @@ function makeRowShape(cb: ShapeCallbacks) {
     const enter = () => cb.onHover(payload)
 
     return (
-      <g style={{ cursor: payload.kind === 'agent' ? 'pointer' : 'default' }}>
+      <g opacity={opacity} style={{ cursor: payload.kind === 'agent' ? 'pointer' : 'default' }}>
         <rect
           x={band.x} y={band.y} width={band.width} height={band.height} fill="transparent"
           onMouseEnter={enter} onMouseLeave={() => cb.onHover(null)}
@@ -190,7 +204,7 @@ function makeRowTick(rowsByKey: Map<string, ChartRow>, onToggle: (id: string) =>
     const open = () => { if (row.agent) onSelect(row.agent) }
     const toggle = (e: React.MouseEvent) => { e.stopPropagation(); onToggle(row.key) }
     return (
-      <g onClick={open} style={{ cursor: row.kind === 'agent' ? 'pointer' : 'default' }}>
+      <g onClick={open} style={{ cursor: row.kind === 'agent' ? 'pointer' : 'default' }} opacity={row.dim ? 0.4 : 1}>
         <title>{label}</title>
         {row.expandable && (
           <g onClick={toggle} style={{ cursor: 'pointer' }}>
@@ -247,6 +261,7 @@ function HoverCard({ row, left, top }: { row: ChartRow; left: number; top: numbe
           {row.segments.length} active turns · {row.ticks.length} human prompts
         </div>
       )}
+      {row.dim && <div className="mt-1 italic text-muted-foreground">Outside the selected window</div>}
     </div>
   )
 }
@@ -264,16 +279,15 @@ export function describeContextEvent(e: ContextEvent): string {
 
 // ─── Chart ───────────────────────────────────────────────────────────────────
 
-export function AgentFlameChart({ timeline, expanded, onToggle, onSelect }: Props) {
+export function AgentFlameChart({ timeline, expanded, window: win, onToggle, onSelect, onWindowChange }: Props) {
+  const wrapperRef = useRef<HTMLDivElement>(null)
   const [hoverRow, setHoverRow] = useState<ChartRow | null>(null)
   const [pointer, setPointer] = useState<{ left: number; top: number } | null>(null)
+  const [drag, setDrag] = useState<{ start: number; current: number } | null>(null)
+  const suppressClick = useRef(false)
 
   const scale = useMemo(() => {
-    const intervals = [
-      ...timeline.orchestrator.busy.map(s => ({ start: ms(s.start), end: ms(s.end) })),
-      ...timeline.orchestrator.prompts.map(p => ({ start: ms(p.timestamp), end: ms(p.timestamp) + 60_000 })),
-      ...timeline.agents.map(a => ({ start: ms(a.start), end: ms(a.end) })),
-    ]
+    const intervals = timelineIntervals(timeline)
     // First pass to count the breaks, then size them so that all breaks
     // together take at most ~15% of the active width.
     const probe = buildCompressedScale(intervals, GAP_THRESHOLD_MS, 0)
@@ -283,7 +297,7 @@ export function AgentFlameChart({ timeline, expanded, onToggle, onSelect }: Prop
     return buildCompressedScale(intervals, GAP_THRESHOLD_MS, gapWidth)
   }, [timeline])
 
-  const rows = useMemo(() => buildRows(timeline, expanded, scale), [timeline, expanded, scale])
+  const rows = useMemo(() => buildRows(timeline, expanded, scale, win), [timeline, expanded, scale, win])
   const rowsByKey = useMemo(() => new Map(rows.map(r => [r.key, r])), [rows])
   const ticks = useMemo(() => clockTicks(scale, 8), [scale])
   const tickLabel = useMemo(() => {
@@ -305,6 +319,13 @@ export function AgentFlameChart({ timeline, expanded, onToggle, onSelect }: Prop
 
 
 
+  // ─── Drag to select a time window
+  const pxToTime = useCallback((px: number, rect: DOMRect) => {
+    const plotWidth = rect.width - PLOT_LEFT - PLOT_RIGHT
+    const frac = Math.min(1, Math.max(0, (px - PLOT_LEFT) / plotWidth))
+    return scale.toTime(frac * scale.total)
+  }, [scale])
+
   // The hover card follows the pointer; the wrapper's own handler knows its rect
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -315,18 +336,66 @@ export function AgentFlameChart({ timeline, expanded, onToggle, onSelect }: Prop
     })
   }
 
+  const onMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0 || !wrapperRef.current) return
+    const rect = wrapperRef.current.getBoundingClientRect()
+    const px = e.clientX - rect.left
+    if (px < PLOT_LEFT || px > rect.width - PLOT_RIGHT) return
+    setDrag({ start: px, current: px })
+  }
+
+  useEffect(() => {
+    if (!drag) return
+    const clampPx = (rect: DOMRect, clientX: number) => Math.min(rect.width - PLOT_RIGHT, Math.max(PLOT_LEFT, clientX - rect.left))
+    const move = (e: MouseEvent) => {
+      const rect = wrapperRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const px = clampPx(rect, e.clientX)
+      setDrag(d => (d ? { ...d, current: px } : d))
+      if (Math.abs(px - drag.start) >= DRAG_MIN_PX) suppressClick.current = true
+    }
+    const up = (e: MouseEvent) => {
+      const rect = wrapperRef.current?.getBoundingClientRect()
+      if (rect) {
+        const px = clampPx(rect, e.clientX)
+        if (Math.abs(px - drag.start) >= DRAG_MIN_PX) {
+          onWindowChange(normalizeWindow(pxToTime(drag.start, rect), pxToTime(px, rect)))
+        }
+      }
+      setDrag(null)
+      // Let the click that follows mouseup be swallowed, then re-enable
+      setTimeout(() => { suppressClick.current = false }, 0)
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up) }
+  }, [drag, onWindowChange, pxToTime])
+
   const height = rows.length * ROW_HEIGHT + 40
+  // After a drag, swallow the click that follows mouseup so rows do not open
+  const onClickCapture = (e: React.MouseEvent) => {
+    if (suppressClick.current) { e.stopPropagation(); e.preventDefault() }
+  }
 
   return (
     <div
+      ref={wrapperRef}
       className="relative w-full select-none"
       style={{ height }}
+      onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
+      onClickCapture={onClickCapture}
       onMouseLeave={() => setHoverRow(null)}
     >
-      <ChartBody rows={rows} rowsByKey={rowsByKey} scale={scale} ticks={ticks} tickLabel={tickLabel} events={timeline.context_events} RowTick={RowTick} RowShape={RowShape} />
+      <ChartBody rows={rows} rowsByKey={rowsByKey} scale={scale} ticks={ticks} tickLabel={tickLabel} win={win} events={timeline.context_events} RowTick={RowTick} RowShape={RowShape} />
 
-      {hoverRow && pointer && <HoverCard row={hoverRow} left={pointer.left} top={pointer.top} />}
+      {drag && Math.abs(drag.current - drag.start) >= DRAG_MIN_PX && (
+        <div
+          className="pointer-events-none absolute inset-y-1 border-x border-primary bg-primary/15"
+          style={{ left: Math.min(drag.start, drag.current), width: Math.abs(drag.current - drag.start) }}
+        />
+      )}
+      {hoverRow && pointer && !drag && <HoverCard row={hoverRow} left={pointer.left} top={pointer.top} />}
     </div>
   )
 }
@@ -337,6 +406,7 @@ interface ChartBodyProps {
   scale: CompressedScale
   ticks: ReturnType<typeof clockTicks>
   tickLabel: Map<number, string>
+  win: TimeWindow | null
   events: ContextEvent[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   RowTick: (props: any) => React.ReactElement | null
@@ -345,7 +415,7 @@ interface ChartBodyProps {
 }
 
 /** Memoized so that pointer tracking in the parent does not re-render Recharts */
-const ChartBody = memo(function ChartBody({ rows, rowsByKey, scale, ticks, tickLabel, events, RowTick, RowShape }: ChartBodyProps) {
+const ChartBody = memo(function ChartBody({ rows, rowsByKey, scale, ticks, tickLabel, win, events, RowTick, RowShape }: ChartBodyProps) {
   return (
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart layout="vertical" data={rows} margin={MARGIN} barCategoryGap={0}>
@@ -388,6 +458,17 @@ const ChartBody = memo(function ChartBody({ rows, rowsByKey, scale, ticks, tickL
           {ticks.map(t => (
             <ReferenceArea key={`g${t.x}`} yAxisId="left" x1={t.x} x2={t.x} stroke="var(--border)" strokeOpacity={0.6} />
           ))}
+          {win && (
+            <ReferenceArea
+              yAxisId="left"
+              x1={scale.toX(win.from)}
+              x2={scale.toX(win.to)}
+              fill={WINDOW_COLOR}
+              fillOpacity={0.1}
+              stroke={WINDOW_COLOR}
+              strokeOpacity={0.6}
+            />
+          )}
           {events.map(e => {
             const st = CONTEXT_EVENT_STYLE[e.type]
             return (
