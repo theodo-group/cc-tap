@@ -324,13 +324,21 @@ function measure(text: string): number {
   return text.length * 7.2
 }
 
-function HoverCard({ row, left, top }: { row: ChartRow; left: number; top: number }) {
+function formatClockSeconds(time: number): string {
+  const d = new Date(time)
+  return `${formatDayClock(time)}:${String(d.getSeconds()).padStart(2, '0')}`
+}
+
+function HoverCard({ row, left, top, cursorTime }: { row: ChartRow; left: number; top: number; cursorTime: number | null }) {
   const a = row.agent
   return (
     <div
       className="pointer-events-none absolute z-10 w-[270px] rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-md"
       style={{ left, top }}
     >
+      {cursorTime != null && (
+        <div className="mb-1 font-mono text-[11px] tabular-nums text-primary">{formatClockSeconds(cursorTime)}</div>
+      )}
       <div className="font-medium">{row.label}</div>
       <div className="text-muted-foreground tabular-nums">
         {formatDayClock(row.startMs)} → {formatClock(row.endMs)} · {row.durationLabel}
@@ -378,6 +386,8 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers,
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [hoverRow, setHoverRow] = useState<ChartRow | null>(null)
   const [pointer, setPointer] = useState<{ left: number; top: number } | null>(null)
+  /** Vertical cursor: pixel x inside the wrapper and the time it points at */
+  const [cursor, setCursor] = useState<{ px: number; time: number } | null>(null)
   const [drag, setDrag] = useState<{ start: number; current: number } | null>(null)
   const suppressClick = useRef(false)
 
@@ -431,7 +441,7 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers,
     return scale.toTime(frac * scale.total)
   }, [scale, PLOT_RIGHT])
 
-  // The hover card follows the pointer; the wrapper's own handler knows its rect
+  // The hover card and the cursor follow the pointer; the wrapper's own handler knows its rect
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const px = e.clientX - rect.left
@@ -439,6 +449,8 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers,
       left: Math.max(0, Math.min(px + 14, rect.width - 280)),
       top: e.clientY - rect.top + 14,
     })
+    if (px >= PLOT_LEFT && px <= rect.width - PLOT_RIGHT) setCursor({ px, time: pxToTime(px, rect) })
+    else setCursor(null)
   }
 
   const onMouseDown = (e: React.MouseEvent) => {
@@ -485,12 +497,12 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers,
   return (
     <div
       ref={wrapperRef}
-      className="relative w-full select-none"
+      className="relative w-full select-none [&_.recharts-wrapper]:outline-none [&_.recharts-wrapper_*]:outline-none"
       style={{ height }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onClickCapture={onClickCapture}
-      onMouseLeave={() => setHoverRow(null)}
+      onMouseLeave={() => { setHoverRow(null); setCursor(null) }}
     >
       <ChartBody rows={rows} scale={scale} ticks={ticks} tickLabel={tickLabel} win={zoomed ? null : win} events={events} RowTick={RowTick} RightTick={RightTick} RowShape={RowShape} rightWidth={rightWidth} />
 
@@ -500,7 +512,14 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers,
           style={{ left: Math.min(drag.start, drag.current), width: Math.abs(drag.current - drag.start) }}
         />
       )}
-      {hoverRow && pointer && !drag && <HoverCard row={hoverRow} left={pointer.left} top={pointer.top} />}
+      {cursor && !drag && (
+        <div className="pointer-events-none absolute inset-y-1 w-px bg-primary/70" style={{ left: cursor.px }}>
+          <span className="absolute -top-0.5 left-1 rounded bg-popover px-1 font-mono text-[10px] tabular-nums text-primary">
+            {formatClock(cursor.time)}
+          </span>
+        </div>
+      )}
+      {hoverRow && pointer && !drag && <HoverCard row={hoverRow} left={pointer.left} top={pointer.top} cursorTime={cursor?.time ?? null} />}
     </div>
   )
 }
@@ -525,7 +544,8 @@ interface ChartBodyProps {
 const ChartBody = memo(function ChartBody({ rows, scale, ticks, tickLabel, win, events, RowTick, RightTick, RowShape, rightWidth }: ChartBodyProps) {
   return (
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart layout="vertical" data={rows} margin={MARGIN} barCategoryGap={0}>
+        {/* accessibilityLayer off: no focus outline or keyboard tooltip on click, hover is handled by the rows */}
+        <ComposedChart layout="vertical" data={rows} margin={MARGIN} barCategoryGap={0} accessibilityLayer={false}>
           <XAxis
             type="number"
             domain={[0, scale.total]}
