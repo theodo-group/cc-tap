@@ -1,12 +1,11 @@
 'use client'
 
-import { useMemo } from 'react'
+import { memo, useMemo, useState } from 'react'
 import {
   ComposedChart,
   Bar,
   XAxis,
   YAxis,
-  Tooltip,
   ReferenceArea,
   ResponsiveContainer,
 } from 'recharts'
@@ -28,9 +27,10 @@ export const NUDGE_COLOR = '#a78bfa'
 export const BASE_COLOR = 'var(--muted)'
 
 const ROW_HEIGHT = 32
-const GAP_THRESHOLD_MS = 30 * 60_000
+export const GAP_THRESHOLD_MS = 30 * 60_000
 const LABEL_WIDTH = 300
 const DURATION_WIDTH = 72
+const MARGIN = { top: 4, right: 8, bottom: 4, left: 8 }
 
 export interface ChartRow {
   key: string
@@ -44,7 +44,7 @@ export interface ChartRow {
   range: [number, number]
   /** compressed x pairs drawn on top of the base bar (orchestrator only) */
   segments: Array<[number, number]>
-  /** compressed x of orange tick marks */
+  /** compressed x of tick marks (prompts on the orchestrator, nudges on agents) */
   ticks: number[]
   color: string
   durationLabel: string
@@ -61,10 +61,19 @@ interface Props {
 
 const ms = (iso: string) => new Date(iso).getTime()
 
-export function buildRows(timeline: AgentTimeline, expanded: Set<string>, scale: CompressedScale): ChartRow[] {
+export function buildRows(
+  timeline: AgentTimeline,
+  expanded: Set<string>,
+  scale: CompressedScale,
+): ChartRow[] {
   const rows: ChartRow[] = []
   const start = ms(timeline.start)
   const end = ms(timeline.end)
+
+  const children = new Map<string, AgentRun[]>()
+  for (const a of timeline.agents) {
+    if (a.parent_id) children.set(a.parent_id, [...(children.get(a.parent_id) ?? []), a])
+  }
 
   rows.push({
     key: '__orchestrator',
@@ -81,11 +90,6 @@ export function buildRows(timeline: AgentTimeline, expanded: Set<string>, scale:
     startMs: start,
     endMs: end,
   })
-
-  const children = new Map<string, AgentRun[]>()
-  for (const a of timeline.agents) {
-    if (a.parent_id) children.set(a.parent_id, [...(children.get(a.parent_id) ?? []), a])
-  }
 
   const push = (a: AgentRun, depth: number) => {
     const s = ms(a.start), e = ms(a.end)
@@ -114,41 +118,53 @@ export function buildRows(timeline: AgentTimeline, expanded: Set<string>, scale:
 
 // ─── Custom pieces ───────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function RowShape(props: any) {
-  const { x, y, width, height, payload } = props as { x: number; y: number; width: number; height: number; payload: ChartRow }
-  if (!payload || !Number.isFinite(x)) return null
-  const [x0, x1] = payload.range
-  const span = Math.max(x1 - x0, 1)
-  const px = width / span
-  const barH = Math.max(6, height - 12)
-  const barY = y + (height - barH) / 2
-  const w = Math.max(width, 3)
-  const toPx = (v: number) => x + (v - x0) * px
+interface ShapeCallbacks {
+  onHover(row: ChartRow | null): void
+  onRowClick(row: ChartRow): void
+}
 
-  if (payload.kind === 'orchestrator') {
+function makeRowShape(cb: ShapeCallbacks) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return function RowShape(props: any) {
+    const { x, y, width, height, payload, background } = props as {
+      x: number; y: number; width: number; height: number; payload: ChartRow
+      background?: { x: number; y: number; width: number; height: number }
+    }
+    if (!payload || !Number.isFinite(x)) return null
+    const [x0, x1] = payload.range
+    const span = Math.max(x1 - x0, 1)
+    const px = width / span
+    const barH = Math.max(6, height - 12)
+    const barY = y + (height - barH) / 2
+    const w = Math.max(width, 3)
+    const toPx = (v: number) => x + (v - x0) * px
+    const tickColor = payload.kind === 'orchestrator' ? TICK_COLOR : NUDGE_COLOR
+    const running = payload.agent?.outcome === 'running'
+
+    // The band owns hover and click for the whole row, so the tooltip can never
+    // point at a different row than the one under the cursor.
+    const band = background ?? { x, y, width, height }
+    const enter = () => cb.onHover(payload)
+
     return (
-      <g>
-        <rect x={x} y={barY} width={w} height={barH} rx={2} fill={BASE_COLOR} />
-        {payload.segments.map(([s, e], i) => (
-          <rect key={i} x={toPx(s)} y={barY} width={Math.max((e - s) * px, 2)} height={barH} fill={BUSY_COLOR} opacity={0.9} />
-        ))}
+      <g style={{ cursor: payload.kind === 'agent' ? 'pointer' : 'default' }}>
+        <rect
+          x={band.x} y={band.y} width={band.width} height={band.height} fill="transparent"
+          onMouseEnter={enter} onMouseLeave={() => cb.onHover(null)}
+          onClick={() => cb.onRowClick(payload)}
+        />
+        {payload.kind === 'orchestrator' && <rect x={x} y={barY} width={w} height={barH} rx={2} fill={BASE_COLOR} pointerEvents="none" />}
+        {payload.kind === 'orchestrator'
+          ? payload.segments.map(([s, e], i) => (
+              <rect key={i} x={toPx(s)} y={barY} width={Math.max((e - s) * px, 2)} height={barH} fill={BUSY_COLOR} opacity={0.9} pointerEvents="none" />
+            ))
+          : <rect x={x} y={barY} width={w} height={barH} rx={2} fill={payload.color} className={running ? 'animate-pulse' : undefined} pointerEvents="none" />}
         {payload.ticks.map((t, i) => (
-          <rect key={`t${i}`} x={toPx(t) - 1.5} y={barY - 3} width={3} height={barH + 6} fill={TICK_COLOR} />
+          <rect key={`t${i}`} x={toPx(t) - 1.5} y={barY - 3} width={3} height={barH + 6} fill={tickColor} pointerEvents="none" />
         ))}
       </g>
     )
   }
-
-  const running = payload.agent?.outcome === 'running'
-  return (
-    <g style={{ cursor: 'pointer' }}>
-      <rect x={x} y={barY} width={w} height={barH} rx={2} fill={payload.color} className={running ? 'animate-pulse' : undefined} />
-      {payload.ticks.map((t, i) => (
-        <rect key={`t${i}`} x={toPx(t) - 1.5} y={barY - 3} width={3} height={barH + 6} fill={NUDGE_COLOR} />
-      ))}
-    </g>
-  )
 }
 
 function makeRowTick(rowsByKey: Map<string, ChartRow>, onToggle: (id: string) => void, onSelect: (a: AgentRun) => void) {
@@ -199,13 +215,13 @@ function measure(text: string): number {
   return text.length * 7.2
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function ChartTooltip({ active, payload }: any) {
-  if (!active || !payload?.length) return null
-  const row = payload[0].payload as ChartRow
+function HoverCard({ row, left, top }: { row: ChartRow; left: number; top: number }) {
   const a = row.agent
   return (
-    <div className="rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-md">
+    <div
+      className="pointer-events-none absolute z-10 w-[270px] rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-md"
+      style={{ left, top }}
+    >
       <div className="font-medium">{row.label}</div>
       <div className="text-muted-foreground tabular-nums">
         {formatDayClock(row.startMs)} → {formatClock(row.endMs)} · {row.durationLabel}
@@ -231,6 +247,9 @@ function ChartTooltip({ active, payload }: any) {
 // ─── Chart ───────────────────────────────────────────────────────────────────
 
 export function AgentFlameChart({ timeline, expanded, onToggle, onSelect }: Props) {
+  const [hoverRow, setHoverRow] = useState<ChartRow | null>(null)
+  const [pointer, setPointer] = useState<{ left: number; top: number } | null>(null)
+
   const scale = useMemo(() => {
     const intervals = [
       ...timeline.orchestrator.busy.map(s => ({ start: ms(s.start), end: ms(s.end) })),
@@ -259,19 +278,58 @@ export function AgentFlameChart({ timeline, expanded, onToggle, onSelect }: Prop
       return [t.x, first && scale.blocks.length > 1 ? formatDayClock(t.time) : formatClock(t.time)]
     }))
   }, [ticks, scale])
+
   const RowTick = useMemo(() => makeRowTick(rowsByKey, onToggle, onSelect), [rowsByKey, onToggle, onSelect])
+  const RowShape = useMemo(() => makeRowShape({
+    onHover: setHoverRow,
+    onRowClick: row => { if (row.agent) onSelect(row.agent) },
+  }), [onSelect])
+
+
+
+  // The hover card follows the pointer; the wrapper's own handler knows its rect
+  const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const px = e.clientX - rect.left
+    setPointer({
+      left: Math.max(0, Math.min(px + 14, rect.width - 280)),
+      top: e.clientY - rect.top + 14,
+    })
+  }
 
   const height = rows.length * ROW_HEIGHT + 40
 
   return (
-    <div className="w-full" style={{ height }}>
+    <div
+      className="relative w-full select-none"
+      style={{ height }}
+      onMouseMove={onMouseMove}
+      onMouseLeave={() => setHoverRow(null)}
+    >
+      <ChartBody rows={rows} rowsByKey={rowsByKey} scale={scale} ticks={ticks} tickLabel={tickLabel} RowTick={RowTick} RowShape={RowShape} />
+
+      {hoverRow && pointer && <HoverCard row={hoverRow} left={pointer.left} top={pointer.top} />}
+    </div>
+  )
+}
+
+interface ChartBodyProps {
+  rows: ChartRow[]
+  rowsByKey: Map<string, ChartRow>
+  scale: CompressedScale
+  ticks: ReturnType<typeof clockTicks>
+  tickLabel: Map<number, string>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  RowTick: (props: any) => React.ReactElement | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  RowShape: (props: any) => React.ReactElement | null
+}
+
+/** Memoized so that pointer tracking in the parent does not re-render Recharts */
+const ChartBody = memo(function ChartBody({ rows, rowsByKey, scale, ticks, tickLabel, RowTick, RowShape }: ChartBodyProps) {
+  return (
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart
-          layout="vertical"
-          data={rows}
-          margin={{ top: 4, right: 8, bottom: 4, left: 8 }}
-          barCategoryGap={0}
-        >
+        <ComposedChart layout="vertical" data={rows} margin={MARGIN} barCategoryGap={0}>
           <XAxis
             type="number"
             domain={[0, scale.total]}
@@ -282,16 +340,7 @@ export function AgentFlameChart({ timeline, expanded, onToggle, onSelect }: Prop
             tickLine={{ stroke: 'var(--border)' }}
             allowDataOverflow
           />
-          <YAxis
-            yAxisId="left"
-            type="category"
-            dataKey="key"
-            width={LABEL_WIDTH}
-            interval={0}
-            tick={RowTick}
-            axisLine={false}
-            tickLine={false}
-          />
+          <YAxis yAxisId="left" type="category" dataKey="key" width={LABEL_WIDTH} interval={0} tick={RowTick} axisLine={false} tickLine={false} />
           <YAxis
             yAxisId="right"
             orientation="right"
@@ -320,19 +369,8 @@ export function AgentFlameChart({ timeline, expanded, onToggle, onSelect }: Prop
           {ticks.map(t => (
             <ReferenceArea key={`g${t.x}`} yAxisId="left" x1={t.x} x2={t.x} stroke="var(--border)" strokeOpacity={0.6} />
           ))}
-          <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--muted)', fillOpacity: 0.35 }} isAnimationActive={false} />
-          <Bar
-            yAxisId="left"
-            dataKey="range"
-            shape={<RowShape />}
-            isAnimationActive={false}
-            onClick={(_data, index) => {
-              const row = rows[index]
-              if (row?.agent) onSelect(row.agent)
-            }}
-          />
+          <Bar yAxisId="left" dataKey="range" shape={RowShape} background={{ fill: 'transparent' }} isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
-    </div>
   )
-}
+})

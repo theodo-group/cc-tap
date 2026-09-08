@@ -16,6 +16,10 @@ This project follows a simple changelog format:
 - **Agents tab on the session page.** A flame-style timeline of the orchestrator and every sub-agent it launched: one row per agent, bars colored by outcome (completed, failed or killed, running, unknown), orange ticks for human prompts on the orchestrator row and for `SendMessage` nudges on agent rows, nested sub-agents that expand on click, a duration column, and a clock axis that collapses idle gaps longer than 30 minutes. Clicking a row opens a details sheet (type, model, tokens, cost, prompt) with a link that jumps to the launching turn in the Replay tab. The tab only appears when the session has agent transcripts.
 - New API route `GET /api/sessions/[id]/agents` backed by `lib/agent-timeline.ts`, which reads the orchestrator JSONL plus the `<session>/subagents/*.jsonl` and `.meta.json` files, and links agents to their launching `Agent` tool call, parent agent, and `task-notification` status.
 
+### Fixed
+
+- The flame chart hover card could describe a different row than the one under the cursor. Each row now owns its hover and click through a full-width band, and the card is positioned by the chart wrapper.
+
 ## 0.8.0
 
 Fixes `npx cc-tap` being broken at 0.7.0.
