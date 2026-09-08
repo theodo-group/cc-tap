@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { formatDayClock, formatClock } from '@/lib/time-scale'
 import { inWindow, intersectsWindow, type TimeWindow } from '@/lib/time-window'
 import { formatCost } from '@/lib/decode'
-import { Bot } from 'lucide-react'
+import { Bot, ZoomIn, ZoomOut } from 'lucide-react'
 
 interface Props {
   timeline: AgentTimeline
@@ -54,6 +54,8 @@ function Legend({ hasEvents }: { hasEvents: boolean }) {
 export function AgentTimelineTab({ timeline, window: win, onWindowChange, onJumpToTurn }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<AgentRun | null>(null)
+  // Zoom shows only the selected window on a linear scale
+  const [zoom, setZoom] = useState(true)
 
   const onToggle = useCallback((id: string) => {
     setExpanded(prev => {
@@ -107,12 +109,20 @@ export function AgentTimelineTab({ timeline, window: win, onWindowChange, onJump
             {formatDayClock(start)} → {sameDay ? formatClock(end) : formatDayClock(end)}
           </span>
         </div>
-        {expandable.length > 0 && (
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setExpanded(new Set(expandable))}>Expand all</Button>
-            <Button variant="ghost" size="sm" onClick={() => setExpanded(new Set())}>Collapse all</Button>
-          </div>
-        )}
+        <div className="flex gap-2">
+          {win && (
+            <Button variant={zoom ? 'secondary' : 'ghost'} size="sm" className="gap-1.5" onClick={() => setZoom(z => !z)}>
+              {zoom ? <ZoomOut className="h-3.5 w-3.5" /> : <ZoomIn className="h-3.5 w-3.5" />}
+              {zoom ? 'Show whole session' : 'Zoom to window'}
+            </Button>
+          )}
+          {expandable.length > 0 && (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setExpanded(new Set(expandable))}>Expand all</Button>
+              <Button variant="ghost" size="sm" onClick={() => setExpanded(new Set())}>Collapse all</Button>
+            </>
+          )}
+        </div>
       </div>
 
       <Legend hasEvents={timeline.context_events.length > 0} />
@@ -123,6 +133,7 @@ export function AgentTimelineTab({ timeline, window: win, onWindowChange, onJump
             timeline={timeline}
             expanded={expanded}
             window={win}
+            zoom={zoom}
             onToggle={onToggle}
             onSelect={onSelect}
             onWindowChange={onWindowChange}

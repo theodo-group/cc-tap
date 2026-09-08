@@ -71,6 +71,8 @@ interface Props {
   timeline: AgentTimeline
   expanded: Set<string>
   window: TimeWindow | null
+  /** Show only the selected window, on a linear scale */
+  zoom: boolean
   onToggle(agentId: string): void
   onSelect(agent: AgentRun): void
   onWindowChange(w: TimeWindow | null): void
@@ -83,10 +85,20 @@ export function buildRows(
   expanded: Set<string>,
   scale: CompressedScale,
   win: TimeWindow | null,
+  zoom = false,
 ): ChartRow[] {
   const rows: ChartRow[] = []
-  const start = ms(timeline.start)
-  const end = ms(timeline.end)
+  // In zoom mode every bar is clipped to the window and rows outside it are dropped
+  const clip = zoom && win ? win : null
+  const lo = clip ? clip.from : -Infinity
+  const hi = clip ? clip.to : Infinity
+  const clamp = (t: number) => Math.min(hi, Math.max(lo, t))
+  const inside = (t: number) => t >= lo && t <= hi
+  const clipSeg = ([a, b]: [number, number]): [number, number] | null =>
+    b < lo || a > hi ? null : [clamp(a), clamp(b)]
+
+  const start = clamp(ms(timeline.start))
+  const end = clamp(ms(timeline.end))
 
   const children = new Map<string, AgentRun[]>()
   for (const a of timeline.agents) {
@@ -101,8 +113,11 @@ export function buildRows(
     expandable: false,
     expanded: false,
     range: [scale.toX(start), scale.toX(end)],
-    segments: timeline.orchestrator.busy.map(s => [scale.toX(ms(s.start)), scale.toX(ms(s.end))]),
-    ticks: timeline.orchestrator.prompts.map(p => scale.toX(ms(p.timestamp))),
+    segments: timeline.orchestrator.busy
+      .map(s => clipSeg([ms(s.start), ms(s.end)]))
+      .filter((x): x is [number, number] => !!x)
+      .map(([a, b]) => [scale.toX(a), scale.toX(b)]),
+    ticks: timeline.orchestrator.prompts.map(p => ms(p.timestamp)).filter(inside).map(t => scale.toX(t)),
     color: BUSY_COLOR,
     durationLabel: formatDurationMs(end - start),
     startMs: start,
@@ -111,7 +126,9 @@ export function buildRows(
   })
 
   const push = (a: AgentRun, depth: number) => {
-    const s = ms(a.start), e = ms(a.end)
+    const s0 = ms(a.start), e0 = ms(a.end)
+    if (clip && !intersectsWindow(s0, e0, clip)) return
+    const s = clamp(s0), e = clamp(e0)
     const kids = children.get(a.id) ?? []
     rows.push({
       key: a.id,
@@ -123,12 +140,12 @@ export function buildRows(
       expanded: expanded.has(a.id),
       range: [scale.toX(s), scale.toX(e)],
       segments: [],
-      ticks: a.nudges.map(n => scale.toX(ms(n))),
+      ticks: a.nudges.map(n => ms(n)).filter(inside).map(t => scale.toX(t)),
       color: OUTCOME_COLORS[a.outcome],
       durationLabel: formatDurationMs(a.duration_ms),
-      startMs: s,
-      endMs: e,
-      dim: !intersectsWindow(s, e, win),
+      startMs: s0,
+      endMs: e0,
+      dim: !clip && !intersectsWindow(s0, e0, win),
     })
     if (expanded.has(a.id)) for (const k of kids) push(k, depth + 1)
   }
@@ -279,14 +296,17 @@ export function describeContextEvent(e: ContextEvent): string {
 
 // ─── Chart ───────────────────────────────────────────────────────────────────
 
-export function AgentFlameChart({ timeline, expanded, window: win, onToggle, onSelect, onWindowChange }: Props) {
+export function AgentFlameChart({ timeline, expanded, window: win, zoom, onToggle, onSelect, onWindowChange }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [hoverRow, setHoverRow] = useState<ChartRow | null>(null)
   const [pointer, setPointer] = useState<{ left: number; top: number } | null>(null)
   const [drag, setDrag] = useState<{ start: number; current: number } | null>(null)
   const suppressClick = useRef(false)
 
+  const zoomed = zoom && !!win
   const scale = useMemo(() => {
+    // Zoomed: a plain linear scale over the window
+    if (zoomed && win) return buildCompressedScale([{ start: win.from, end: win.to }], GAP_THRESHOLD_MS, 0)
     const intervals = timelineIntervals(timeline)
     // First pass to count the breaks, then size them so that all breaks
     // together take at most ~15% of the active width.
@@ -295,9 +315,13 @@ export function AgentFlameChart({ timeline, expanded, window: win, onToggle, onS
     const n = Math.max(1, probe.breaks.length)
     const gapWidth = Math.max(30_000, Math.min(active * 0.04, (active * 0.15) / n))
     return buildCompressedScale(intervals, GAP_THRESHOLD_MS, gapWidth)
-  }, [timeline])
+  }, [timeline, zoomed, win])
 
-  const rows = useMemo(() => buildRows(timeline, expanded, scale, win), [timeline, expanded, scale, win])
+  const rows = useMemo(() => buildRows(timeline, expanded, scale, win, zoomed), [timeline, expanded, scale, win, zoomed])
+  const events = useMemo(
+    () => (zoomed && win ? timeline.context_events.filter(e => { const t = ms(e.timestamp); return t >= win.from && t <= win.to }) : timeline.context_events),
+    [timeline, zoomed, win],
+  )
   const rowsByKey = useMemo(() => new Map(rows.map(r => [r.key, r])), [rows])
   const ticks = useMemo(() => clockTicks(scale, 8), [scale])
   const tickLabel = useMemo(() => {
@@ -387,7 +411,7 @@ export function AgentFlameChart({ timeline, expanded, window: win, onToggle, onS
       onClickCapture={onClickCapture}
       onMouseLeave={() => setHoverRow(null)}
     >
-      <ChartBody rows={rows} rowsByKey={rowsByKey} scale={scale} ticks={ticks} tickLabel={tickLabel} win={win} events={timeline.context_events} RowTick={RowTick} RowShape={RowShape} />
+      <ChartBody rows={rows} rowsByKey={rowsByKey} scale={scale} ticks={ticks} tickLabel={tickLabel} win={zoomed ? null : win} events={events} RowTick={RowTick} RowShape={RowShape} />
 
       {drag && Math.abs(drag.current - drag.start) >= DRAG_MIN_PX && (
         <div
