@@ -164,6 +164,22 @@ describe('context events', async () => {
     ])
   })
 
+  it('does not mistake parallel tool results for a rewind', () => {
+    const toolUse = (uuid: string, parent: string, ts: string, id: string) =>
+      msg(uuid, parent, ts, 'assistant', [{ type: 'tool_use', id, name: 'Bash', input: {} }])
+    const toolResult = (uuid: string, parent: string, ts: string, id: string) =>
+      msg(uuid, parent, ts, 'user', [{ type: 'tool_result', tool_use_id: id, content: 'ok' }])
+    const lines = [
+      msg('u', null, T(0)),
+      toolUse('a1', 'u', T(1), 't1'),
+      toolUse('a2', 'a1', T(1), 't2'),
+      toolResult('r1', 'a1', T(2), 't1'), // parent is a1, not the previous line a2
+      toolResult('r2', 'a2', T(2), 't2'),
+      msg('n', 'r2', T(3), 'assistant'),
+    ]
+    expect(findRewinds(lines)).toEqual([])
+  })
+
   it('ignores a linear chain and unknown parents (after compaction)', () => {
     const lines = [msg('a', null, T(0)), msg('b', 'a', T(1)), { type: 'system', uuid: 's', subtype: 'compact_boundary', timestamp: T(2), compactMetadata: { trigger: 'auto', preTokens: 100, postTokens: 10, durationMs: 5 } }, msg('c', 's', T(3))]
     expect(findRewinds(lines)).toEqual([])

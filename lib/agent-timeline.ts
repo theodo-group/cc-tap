@@ -94,7 +94,11 @@ export function findRewinds(lines: AnyLine[]): Rewind[] {
     if (l.type !== 'user' && l.type !== 'assistant') continue
     const uuid: string | undefined = l.uuid
     const parent: string | undefined = l.parentUuid ?? undefined
-    if (prev && parent && parent !== prev && indexByUuid.has(parent)) {
+    // Tool results are parented to their own tool call. When several calls run
+    // in parallel, the results fan out from the same message: not a rewind.
+    const content = l.message?.content
+    const isToolResult = Array.isArray(content) && content.some((c: AnyLine) => c?.type === 'tool_result')
+    if (!isToolResult && prev && parent && parent !== prev && indexByUuid.has(parent)) {
       const from = indexByUuid.get(parent)! + 1
       out.push({
         timestamp: l.timestamp ?? '',
