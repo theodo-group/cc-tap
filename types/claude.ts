@@ -439,3 +439,51 @@ export interface TeamAnalytics {
   mcp_servers: TeamMcpServer[]
   errors: string[]
 }
+
+// ─── Agent Timeline ───────────────────────────────────────────────────────────
+
+export type AgentOutcome = 'completed' | 'failed' | 'killed' | 'running' | 'unknown'
+
+export interface TimeSegment {
+  start: string
+  end: string
+}
+
+export interface PromptTick {
+  timestamp: string
+  text: string
+}
+
+export interface AgentRun {
+  id: string
+  parent_id: string | null
+  depth: number
+  description: string
+  agent_type: string
+  model?: string
+  prompt: string
+  start: string
+  end: string
+  duration_ms: number
+  turns: number
+  usage: TurnUsage
+  estimated_cost: number
+  outcome: AgentOutcome
+  /** Timestamps of SendMessage calls that continued this agent */
+  nudges: string[]
+  launch_tool_use_id?: string
+  /** uuid of the assistant message in the orchestrator log that launched it (depth 1 only) */
+  launch_turn_uuid?: string
+  children_count: number
+}
+
+export interface AgentTimeline {
+  session_id: string
+  start: string
+  end: string
+  orchestrator: {
+    busy: TimeSegment[]
+    prompts: PromptTick[]
+  }
+  agents: AgentRun[]
+}
