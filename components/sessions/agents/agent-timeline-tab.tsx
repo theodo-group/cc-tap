@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import type { AgentRun, AgentTimeline } from '@/types/claude'
-import { AgentFlameChart, OUTCOME_COLORS, BUSY_COLOR, TICK_COLOR, NUDGE_COLOR } from './agent-flame-chart'
+import { AgentFlameChart, OUTCOME_COLORS, BUSY_COLOR, TICK_COLOR, NUDGE_COLOR, CONTEXT_EVENT_STYLE, describeContextEvent } from './agent-flame-chart'
 import { AgentDetailsSheet } from './agent-details-sheet'
 import { Button } from '@/components/ui/button'
 import { formatDayClock, formatClock } from '@/lib/time-scale'
@@ -14,7 +14,7 @@ interface Props {
   onJumpToTurn?(uuid: string): void
 }
 
-function Legend() {
+function Legend({ hasEvents }: { hasEvents: boolean }) {
   const items: Array<[string, string]> = [
     ['Orchestrator active', BUSY_COLOR],
     ['Completed', OUTCOME_COLORS.completed],
@@ -38,6 +38,12 @@ function Legend() {
       <span className="flex items-center gap-1.5">
         <span className="inline-block h-2.5 w-4 rounded-sm border border-dashed border-border bg-muted-foreground/10" /> Idle gap &gt; 30 min
       </span>
+      {hasEvents && (Object.keys(CONTEXT_EVENT_STYLE) as Array<keyof typeof CONTEXT_EVENT_STYLE>).map(k => (
+        <span key={k} className="flex items-center gap-1.5" style={{ color: CONTEXT_EVENT_STYLE[k].color }}>
+          <span className="inline-block h-3.5 w-0 border-l border-dashed" style={{ borderColor: CONTEXT_EVENT_STYLE[k].color }} />
+          {CONTEXT_EVENT_STYLE[k].glyph} {CONTEXT_EVENT_STYLE[k].label}
+        </span>
+      ))}
     </div>
   )
 }
@@ -59,6 +65,8 @@ export function AgentTimelineTab({ timeline, onJumpToTurn }: Props) {
   const parents = useMemo(() => new Map(timeline.agents.map(a => [a.id, a])), [timeline])
   const expandable = useMemo(() => timeline.agents.filter(a => a.children_count > 0).map(a => a.id), [timeline])
 
+  const events = timeline.context_events
+
   const stats = useMemo(() => {
     const top = timeline.agents.filter(a => !a.parent_id)
     const cost = timeline.agents.reduce((s, a) => s + a.estimated_cost, 0)
@@ -78,6 +86,7 @@ export function AgentTimelineTab({ timeline, onJumpToTurn }: Props) {
 
   const start = new Date(timeline.start).getTime()
   const end = new Date(timeline.end).getTime()
+  const sameDay = new Date(start).toDateString() === new Date(end).toDateString()
 
   return (
     <div className="flex flex-col gap-4 px-4 py-5 md:px-6">
@@ -89,7 +98,7 @@ export function AgentTimelineTab({ timeline, onJumpToTurn }: Props) {
           {stats.running > 0 && <span style={{ color: OUTCOME_COLORS.running }}> · {stats.running} running</span>}
           <span className="text-muted-foreground"> · agents cost {formatCost(stats.cost)}</span>
           <span className="ml-3 font-mono text-xs uppercase tracking-widest text-muted-foreground">
-            {formatDayClock(start)} → {formatDayClock(end).startsWith(formatDayClock(start).split(' ')[0]) ? formatClock(end) : formatDayClock(end)}
+            {formatDayClock(start)} → {sameDay ? formatClock(end) : formatDayClock(end)}
           </span>
         </div>
         {expandable.length > 0 && (
@@ -100,13 +109,38 @@ export function AgentTimelineTab({ timeline, onJumpToTurn }: Props) {
         )}
       </div>
 
-      <Legend />
+      <Legend hasEvents={timeline.context_events.length > 0} />
 
       <div className="overflow-x-auto rounded-xl border border-border bg-card p-2">
         <div className="min-w-[720px]">
-          <AgentFlameChart timeline={timeline} expanded={expanded} onToggle={onToggle} onSelect={onSelect} />
+          <AgentFlameChart
+            timeline={timeline}
+            expanded={expanded}
+            onToggle={onToggle}
+            onSelect={onSelect}
+          />
         </div>
       </div>
+
+      {events.length > 0 && (
+        <div className="rounded-xl border border-border bg-card px-4 py-3">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Context management
+          </h3>
+          <ul className="space-y-1 text-sm">
+            {events.map(e => {
+              const st = CONTEXT_EVENT_STYLE[e.type]
+              return (
+                <li key={e.uuid || e.timestamp} className="flex flex-wrap items-baseline gap-x-3">
+                  <span className="font-mono text-xs text-muted-foreground tabular-nums">{formatDayClock(new Date(e.timestamp).getTime())}</span>
+                  <span className="font-medium" style={{ color: st.color }}>{st.glyph} {st.label}</span>
+                  <span className="text-muted-foreground">{describeContextEvent(e)}</span>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
 
       <AgentDetailsSheet
         agent={selected}

@@ -15,6 +15,7 @@ This project follows a simple changelog format:
 
 - **Agents tab on the session page.** A flame-style timeline of the orchestrator and every sub-agent it launched: one row per agent, bars colored by outcome (completed, failed or killed, running, unknown), orange ticks for human prompts on the orchestrator row and for `SendMessage` nudges on agent rows, nested sub-agents that expand on click, a duration column, and a clock axis that collapses idle gaps longer than 30 minutes. Clicking a row opens a details sheet (type, model, tokens, cost, prompt) with a link that jumps to the launching turn in the Replay tab. The tab only appears when the session has agent transcripts.
 - New API route `GET /api/sessions/[id]/agents` backed by `lib/agent-timeline.ts`, which reads the orchestrator JSONL plus the `<session>/subagents/*.jsonl` and `.meta.json` files, and links agents to their launching `Agent` tool call, parent agent, and `task-notification` status.
+- **Context-management markers.** The agents payload now carries `context_events`: compactions (from `compact_boundary` lines), `/clear` commands, and rewinds. A rewind has no marker in the log, so it is detected as a fork in the `parentUuid` chain; the discarded turns are flagged `discarded` in the replay data, shown dimmed under a "REWIND" band, and still counted in cost. The flame chart draws each event as a dashed vertical line and lists them under the chart.
 
 ### Fixed
 

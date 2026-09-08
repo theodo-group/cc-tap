@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RawApiTab } from '@/components/sessions/raw-api/raw-api-tab'
 import { AgentTimelineTab } from '@/components/sessions/agents/agent-timeline-tab'
-import { AlertTriangle, MessageSquare, Coins, DollarSign, Clock, Zap, Radio, Bot } from 'lucide-react'
+import { AlertTriangle, MessageSquare, Coins, DollarSign, Clock, Zap, Radio, Bot, Undo2 } from 'lucide-react'
 
 const fetcher = (url: string) =>
   fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
@@ -104,6 +104,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
     }
   }
   const totalTokens = totalInput + totalOutput + totalCacheWrite + totalCacheRead
+  const discardedTurns = replay.turns.filter(t => t.type === 'assistant' && t.discarded).length
 
   // Build tool results map: tool_use_id -> result (from user turns)
   const toolResults = new Map<string, { content: string; is_error: boolean }>()
@@ -147,7 +148,9 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">Assistant messages</p>
+              <p className="text-xs text-muted-foreground">
+                Assistant messages{discardedTurns > 0 ? ` · ${discardedTurns} discarded by rewind` : ''}
+              </p>
             </CardContent>
           </Card>
 
@@ -253,10 +256,20 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
             <div className="flex-1 min-w-0 overflow-y-auto px-4 py-6 max-w-6xl">
               {replay.turns.map((turn, i) => {
                 const compactionBefore = compactionByTurnIndex.get(i)
+                const startsDiscarded = turn.discarded && !replay.turns[i - 1]?.discarded
+                const discardedBand = startsDiscarded ? (
+                  <div className="my-3 flex items-center gap-2 rounded-lg border border-purple-400/40 bg-purple-500/10 px-4 py-2 text-sm text-purple-300">
+                    <Undo2 className="h-4 w-4" />
+                    <span className="font-semibold">REWIND</span>
+                    <span className="text-purple-300/80">the turns below were discarded. Their tokens still count.</span>
+                  </div>
+                ) : null
+                const wrapClass = turn.discarded ? 'opacity-50 saturate-50' : undefined
 
                 if (turn.type === 'user') {
                   return (
-                    <div key={turn.uuid || i} id={`turn-${turn.uuid}`}>
+                    <div key={turn.uuid || i} id={`turn-${turn.uuid}`} className={wrapClass}>
+                      {discardedBand}
                       <UserTurnCard
                         turn={turn}
                         turnNumber={i + 1}
@@ -269,7 +282,8 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
 
                 assistantTurnNum++
                 return (
-                  <div key={turn.uuid || i} id={`turn-${turn.uuid}`}>
+                  <div key={turn.uuid || i} id={`turn-${turn.uuid}`} className={wrapClass}>
+                    {discardedBand}
                     <AssistantTurnCard
                       turn={turn}
                       turnNumber={assistantTurnNum}

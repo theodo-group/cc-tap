@@ -7,11 +7,12 @@ import {
   XAxis,
   YAxis,
   ReferenceArea,
+  ReferenceLine,
   ResponsiveContainer,
 } from 'recharts'
-import type { AgentRun, AgentOutcome, AgentTimeline } from '@/types/claude'
+import type { AgentRun, AgentOutcome, AgentTimeline, ContextEvent, ContextEventType } from '@/types/claude'
 import { buildCompressedScale, clockTicks, formatClock, formatDayClock, type CompressedScale } from '@/lib/time-scale'
-import { formatDurationMs } from '@/lib/decode'
+import { formatDurationMs, formatTokens } from '@/lib/decode'
 
 export const OUTCOME_COLORS: Record<AgentOutcome, string> = {
   completed: '#5fb89a',
@@ -25,6 +26,12 @@ export const TICK_COLOR = '#e0824b'
 /** SendMessage calls received by an agent from its launcher */
 export const NUDGE_COLOR = '#a78bfa'
 export const BASE_COLOR = 'var(--muted)'
+
+export const CONTEXT_EVENT_STYLE: Record<ContextEventType, { color: string; glyph: string; label: string }> = {
+  compact: { color: '#f59e0b', glyph: '⚡', label: 'Compaction' },
+  clear:   { color: '#f87171', glyph: '⌫', label: 'Clear' },
+  rewind:  { color: '#c084fc', glyph: '↶', label: 'Rewind' },
+}
 
 const ROW_HEIGHT = 32
 export const GAP_THRESHOLD_MS = 30 * 60_000
@@ -244,6 +251,17 @@ function HoverCard({ row, left, top }: { row: ChartRow; left: number; top: numbe
   )
 }
 
+export function describeContextEvent(e: ContextEvent): string {
+  if (e.type === 'compact') {
+    const parts: string[] = e.trigger ? [e.trigger] : []
+    if (e.pre_tokens != null && e.post_tokens != null) parts.push(`${formatTokens(e.pre_tokens)} → ${formatTokens(e.post_tokens)} tokens`)
+    if (e.duration_ms != null) parts.push(formatDurationMs(e.duration_ms))
+    return parts.filter(Boolean).join(' · ')
+  }
+  if (e.type === 'rewind') return `${e.discarded_turns ?? 0} turn${e.discarded_turns === 1 ? '' : 's'} discarded`
+  return 'conversation cleared'
+}
+
 // ─── Chart ───────────────────────────────────────────────────────────────────
 
 export function AgentFlameChart({ timeline, expanded, onToggle, onSelect }: Props) {
@@ -306,7 +324,7 @@ export function AgentFlameChart({ timeline, expanded, onToggle, onSelect }: Prop
       onMouseMove={onMouseMove}
       onMouseLeave={() => setHoverRow(null)}
     >
-      <ChartBody rows={rows} rowsByKey={rowsByKey} scale={scale} ticks={ticks} tickLabel={tickLabel} RowTick={RowTick} RowShape={RowShape} />
+      <ChartBody rows={rows} rowsByKey={rowsByKey} scale={scale} ticks={ticks} tickLabel={tickLabel} events={timeline.context_events} RowTick={RowTick} RowShape={RowShape} />
 
       {hoverRow && pointer && <HoverCard row={hoverRow} left={pointer.left} top={pointer.top} />}
     </div>
@@ -319,6 +337,7 @@ interface ChartBodyProps {
   scale: CompressedScale
   ticks: ReturnType<typeof clockTicks>
   tickLabel: Map<number, string>
+  events: ContextEvent[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   RowTick: (props: any) => React.ReactElement | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -326,7 +345,7 @@ interface ChartBodyProps {
 }
 
 /** Memoized so that pointer tracking in the parent does not re-render Recharts */
-const ChartBody = memo(function ChartBody({ rows, rowsByKey, scale, ticks, tickLabel, RowTick, RowShape }: ChartBodyProps) {
+const ChartBody = memo(function ChartBody({ rows, rowsByKey, scale, ticks, tickLabel, events, RowTick, RowShape }: ChartBodyProps) {
   return (
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart layout="vertical" data={rows} margin={MARGIN} barCategoryGap={0}>
@@ -369,6 +388,20 @@ const ChartBody = memo(function ChartBody({ rows, rowsByKey, scale, ticks, tickL
           {ticks.map(t => (
             <ReferenceArea key={`g${t.x}`} yAxisId="left" x1={t.x} x2={t.x} stroke="var(--border)" strokeOpacity={0.6} />
           ))}
+          {events.map(e => {
+            const st = CONTEXT_EVENT_STYLE[e.type]
+            return (
+              <ReferenceLine
+                key={e.uuid || e.timestamp}
+                yAxisId="left"
+                x={scale.toX(ms(e.timestamp))}
+                stroke={st.color}
+                strokeDasharray="4 3"
+                strokeWidth={1.5}
+                label={{ value: st.glyph, position: 'insideTopRight', fill: st.color, fontSize: 12 }}
+              />
+            )
+          })}
           <Bar yAxisId="left" dataKey="range" shape={RowShape} background={{ fill: 'transparent' }} isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
