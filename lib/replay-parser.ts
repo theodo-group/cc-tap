@@ -8,6 +8,7 @@ import type {
 } from '@/types/claude'
 import { estimateCostFromUsage } from '@/lib/pricing'
 import { readJSONLLines } from '@/lib/claude-reader'
+import { findRewinds } from '@/lib/agent-timeline'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyLine = Record<string, any>
@@ -164,6 +165,12 @@ export async function parseSessionReplay(
       })
       turnIndex++
     }
+  }
+
+  // Flag turns that a later rewind dropped from the conversation
+  const discarded = new Set(findRewinds(lines).flatMap(r => r.discarded_uuids))
+  if (discarded.size > 0) {
+    for (const t of turns) if (discarded.has(t.uuid)) t.discarded = true
   }
 
   return { session_id: sessionId, slug, ai_title: aiTitle, version, git_branch: gitBranch, turns, compactions, summaries, total_cost: totalCost }

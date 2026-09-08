@@ -1,6 +1,6 @@
 import path from 'path'
 import { readdir, readFile, stat } from 'fs/promises'
-import type { AgentOutcome, AgentRun, AgentTimeline, PromptTick, TimeSegment, TurnUsage } from '@/types/claude'
+import type { AgentOutcome, AgentRun, AgentTimeline, ContextEvent, PromptTick, TimeSegment, TurnUsage } from '@/types/claude'
 import { estimateCostFromUsage } from '@/lib/pricing'
 import { readJSONLLines } from '@/lib/claude-reader'
 
@@ -71,6 +71,69 @@ export function parseNotifications(text: string, timestamp: string): Notificatio
     out.push({ taskId: m[1].trim(), status: m[2].trim(), timestamp })
   }
   return out
+}
+
+export interface Rewind {
+  timestamp: string
+  uuid: string
+  rewound_to_uuid: string
+  discarded_uuids: string[]
+}
+
+/**
+ * A rewind leaves no marker in the log. It shows up as a fork: a message whose
+ * parentUuid points to an earlier message instead of the previous one. Every
+ * message between that parent and the fork was discarded.
+ */
+export function findRewinds(lines: AnyLine[]): Rewind[] {
+  const out: Rewind[] = []
+  const indexByUuid = new Map<string, number>()
+  const messages: AnyLine[] = []
+  let prev: string | undefined
+  for (const l of lines) {
+    if (l.type !== 'user' && l.type !== 'assistant') continue
+    const uuid: string | undefined = l.uuid
+    const parent: string | undefined = l.parentUuid ?? undefined
+    if (prev && parent && parent !== prev && indexByUuid.has(parent)) {
+      const from = indexByUuid.get(parent)! + 1
+      out.push({
+        timestamp: l.timestamp ?? '',
+        uuid: uuid ?? '',
+        rewound_to_uuid: parent,
+        discarded_uuids: messages.slice(from).map(m => m.uuid).filter((u): u is string => !!u),
+      })
+      // Later messages continue from the fork; the discarded ones are no longer "current"
+      messages.length = from
+    }
+    if (uuid) { indexByUuid.set(uuid, messages.length); messages.push(l) }
+    prev = uuid
+  }
+  return out
+}
+
+const CLEAR_RE = /<command-name>\/clear<\/command-name>/
+
+export function findContextEvents(lines: AnyLine[]): ContextEvent[] {
+  const events: ContextEvent[] = []
+  for (const l of lines) {
+    if (l.type === 'system' && l.subtype === 'compact_boundary') {
+      const m = l.compactMetadata ?? {}
+      events.push({
+        type: 'compact', timestamp: l.timestamp ?? '', uuid: l.uuid ?? '',
+        trigger: m.trigger ?? 'auto', pre_tokens: m.preTokens, post_tokens: m.postTokens, duration_ms: m.durationMs,
+      })
+      continue
+    }
+    if (l.type === 'user') {
+      const c = l.message?.content
+      const text = typeof c === 'string' ? c : Array.isArray(c) ? c.map((x: AnyLine) => x.text ?? '').join('') : ''
+      if (CLEAR_RE.test(text)) events.push({ type: 'clear', timestamp: l.timestamp ?? '', uuid: l.uuid ?? '' })
+    }
+  }
+  for (const r of findRewinds(lines)) {
+    events.push({ type: 'rewind', timestamp: r.timestamp, uuid: r.uuid, rewound_to_uuid: r.rewound_to_uuid, discarded_turns: r.discarded_uuids.length })
+  }
+  return events.sort((a, b) => a.timestamp.localeCompare(b.timestamp))
 }
 
 /** True when a user line is a message typed by a human (not a tool result, not system-injected) */
@@ -278,5 +341,6 @@ export async function parseAgentTimeline(
       prompts: main.prompts,
     },
     agents,
+    context_events: findContextEvents(mainLines),
   }
 }

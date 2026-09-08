@@ -160,6 +160,8 @@ export interface ReplayTurn {
   estimated_cost?: number
   turn_duration_ms?: number
   response_time_s?: number
+  /** True when a later rewind dropped this turn from the conversation */
+  discarded?: boolean
 }
 
 export interface CompactionEvent {
@@ -477,6 +479,22 @@ export interface AgentRun {
   children_count: number
 }
 
+export type ContextEventType = 'compact' | 'clear' | 'rewind'
+
+export interface ContextEvent {
+  type: ContextEventType
+  timestamp: string
+  uuid: string
+  /** compact */
+  trigger?: 'auto' | 'manual'
+  pre_tokens?: number
+  post_tokens?: number
+  duration_ms?: number
+  /** rewind */
+  rewound_to_uuid?: string
+  discarded_turns?: number
+}
+
 export interface AgentTimeline {
   session_id: string
   start: string
@@ -486,4 +504,5 @@ export interface AgentTimeline {
     prompts: PromptTick[]
   }
   agents: AgentRun[]
+  context_events: ContextEvent[]
 }

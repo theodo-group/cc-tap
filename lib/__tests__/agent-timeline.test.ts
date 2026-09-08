@@ -144,3 +144,39 @@ describe('helpers', () => {
     expect(resolveOutcome('b', n, new Set(['b']), undefined, 0)).toBe('killed')
   })
 })
+
+describe('context events', async () => {
+  const { findRewinds, findContextEvents } = await import('@/lib/agent-timeline')
+  const msg = (uuid: string, parent: string | null, ts: string, type: 'user' | 'assistant' = 'user', content: unknown = 'x') =>
+    ({ type, uuid, parentUuid: parent, timestamp: ts, message: { role: type, content } })
+
+  it('detects a rewind as a fork and lists the discarded messages', () => {
+    const lines = [
+      msg('a', null, T(0)), msg('b', 'a', T(1), 'assistant'), msg('c', 'b', T(2)), msg('d', 'c', T(3), 'assistant'),
+      msg('e', 'b', T(10)), // fork back to b: c and d are discarded
+      msg('f', 'e', T(11), 'assistant'),
+      msg('g', 'e', T(20)), // second fork: f discarded
+    ]
+    const r = findRewinds(lines)
+    expect(r).toEqual([
+      { timestamp: T(10), uuid: 'e', rewound_to_uuid: 'b', discarded_uuids: ['c', 'd'] },
+      { timestamp: T(20), uuid: 'g', rewound_to_uuid: 'e', discarded_uuids: ['f'] },
+    ])
+  })
+
+  it('ignores a linear chain and unknown parents (after compaction)', () => {
+    const lines = [msg('a', null, T(0)), msg('b', 'a', T(1)), { type: 'system', uuid: 's', subtype: 'compact_boundary', timestamp: T(2), compactMetadata: { trigger: 'auto', preTokens: 100, postTokens: 10, durationMs: 5 } }, msg('c', 's', T(3))]
+    expect(findRewinds(lines)).toEqual([])
+    const ev = findContextEvents(lines)
+    expect(ev).toEqual([{ type: 'compact', timestamp: T(2), uuid: 's', trigger: 'auto', pre_tokens: 100, post_tokens: 10, duration_ms: 5 }])
+  })
+
+  it('reads /clear commands and orders events by time', () => {
+    const lines = [
+      msg('a', null, T(0)), msg('b', 'a', T(1), 'assistant'),
+      msg('z', 'b', T(5), 'user', '<command-name>/clear</command-name>\n<command-message>clear</command-message>'),
+      { type: 'system', uuid: 's', subtype: 'compact_boundary', timestamp: T(3), compactMetadata: { trigger: 'manual' } },
+    ]
+    expect(findContextEvents(lines).map(e => [e.type, e.timestamp])).toEqual([['compact', T(3)], ['clear', T(5)]])
+  })
+})
