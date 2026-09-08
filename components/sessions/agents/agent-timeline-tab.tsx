@@ -264,6 +264,7 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
       )}
 
       <AgentDetailsSheet
+        sessionId={sessionId}
         agent={selected}
         parent={selected?.parent_id ? parents.get(selected.parent_id) : undefined}
         onClose={() => setSelected(null)}

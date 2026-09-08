@@ -8,9 +8,11 @@ import { Separator } from '@/components/ui/separator'
 import { formatCost, formatTokens, formatDurationMs } from '@/lib/decode'
 import { formatClock, formatDayClock } from '@/lib/time-scale'
 import { OUTCOME_COLORS } from './agent-flame-chart'
-import { ExternalLink } from 'lucide-react'
+import { AgentTranscript } from './agent-transcript'
+import { ExternalLink, MessageSquare } from 'lucide-react'
 
 interface Props {
+  sessionId: string
   agent: AgentRun | null
   parent?: AgentRun
   onClose(): void
@@ -26,7 +28,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   )
 }
 
-export function AgentDetailsSheet({ agent, parent, onClose, onJumpToTurn }: Props) {
+export function AgentDetailsSheet({ sessionId, agent, parent, onClose, onJumpToTurn }: Props) {
   const a = agent
   const start = a ? new Date(a.start).getTime() : 0
   const end = a ? new Date(a.end).getTime() : 0
@@ -36,7 +38,7 @@ export function AgentDetailsSheet({ agent, parent, onClose, onJumpToTurn }: Prop
 
   return (
     <Sheet open={!!a} onOpenChange={open => { if (!open) onClose() }}>
-      <SheetContent className="overflow-y-auto sm:max-w-md">
+      <SheetContent className="overflow-y-auto w-full sm:max-w-3xl">
         {a && (
           <>
             <SheetHeader>
@@ -83,13 +85,23 @@ export function AgentDetailsSheet({ agent, parent, onClose, onJumpToTurn }: Prop
             )}
 
             {a.prompt && (
-              <details className="px-4 pb-6">
+              <details className="px-4">
                 <summary className="cursor-pointer text-sm font-medium">Prompt</summary>
-                <pre className="mt-2 max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-3 text-xs">
+                <pre className="mt-2 max-h-[40vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-3 text-xs">
                   {a.prompt}
                 </pre>
               </details>
             )}
+
+            <Separator />
+
+            <div className="px-4 pb-6">
+              <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                <MessageSquare className="h-3.5 w-3.5" /> Conversation · {a.turns} assistant turns
+              </h3>
+              {/* Keyed by agent so a new agent starts from the top */}
+              <AgentTranscript key={a.id} sessionId={sessionId} agentId={a.id} />
+            </div>
           </>
         )}
       </SheetContent>
