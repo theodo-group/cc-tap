@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import type { ReplayData } from '@/types/claude'
 import { UserTurnCard, AssistantTurnCard } from '@/components/sessions/replay/turn-cards'
@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle } from 'lucide-react'
+import { turnAtTime, flashTurn } from '@/lib/turn-at-time'
 
 const fetcher = (url: string) =>
   fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
@@ -16,15 +17,42 @@ const PAGE = 60
 
 interface Props {
   sessionId: string
-  agentId: string
+  /** Sub-agent to show; absent shows the orchestrator log itself */
+  agentId?: string
+  /** Once loaded, scroll to the turn in progress at this time and flash it */
+  scrollToMs?: number
 }
 
-/** The conversation of one sub-agent, rendered with the Replay turn cards */
-export function AgentTranscript({ sessionId, agentId }: Props) {
-  const { data, error, isLoading } = useSWR<ReplayData>(`/api/sessions/${sessionId}/agents/${agentId}`, fetcher, {
+/** The conversation of one sub-agent, or of the orchestrator, rendered with the Replay turn cards */
+export function AgentTranscript({ sessionId, agentId, scrollToMs }: Props) {
+  // The orchestrator url is the one the page already holds, so SWR serves it from cache
+  const url = agentId ? `/api/sessions/${sessionId}/agents/${agentId}` : `/api/sessions/${sessionId}/replay`
+  const { data, error, isLoading } = useSWR<ReplayData>(url, fetcher, {
     revalidateOnFocus: false,
   })
   const [limit, setLimit] = useState(PAGE)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  // Scroll to the clicked time once the turns are in the DOM
+  const target = useMemo(() => {
+    if (scrollToMs === undefined || !data) return null
+    const t = turnAtTime(data.turns, scrollToMs)
+    return t ? { uuid: t.uuid, index: data.turns.indexOf(t) } : null
+  }, [data, scrollToMs])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { if (target) setLimit(n => Math.max(n, target.index + 20)) }, [target])
+  useEffect(() => {
+    if (!target || limit < target.index + 1) return
+    let undo: (() => void) | undefined
+    // Wait for the sheet's open animation, so the scroll lands where it should
+    const t1 = setTimeout(() => {
+      const el = listRef.current?.querySelector<HTMLElement>(`[data-turn="${target.uuid}"]`)
+      if (el) undo = flashTurn(el)
+    }, 350)
+    return () => { clearTimeout(t1); undo?.() }
+    // A new limit re-renders the same target; only a new target must scroll again
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target, limit >= (target?.index ?? 0) + 1])
 
   const toolResults = useMemo(() => {
     const map = new Map<string, { content: string; is_error: boolean }>()
@@ -57,17 +85,21 @@ export function AgentTranscript({ sessionId, agentId }: Props) {
   let assistantTurnNum = 0
 
   return (
-    <div>
+    <div ref={listRef}>
       {turns.slice(0, limit).map((turn, i) => {
         const compactionBefore = compactionByTurnIndex.get(i)
         if (turn.type === 'user') {
           return (
-            <UserTurnCard key={turn.uuid || i} turn={turn} turnNumber={i + 1} compactionBefore={compactionBefore} toolResults={toolResults} />
+            <div key={turn.uuid || i} data-turn={turn.uuid}>
+              <UserTurnCard turn={turn} turnNumber={i + 1} compactionBefore={compactionBefore} toolResults={toolResults} />
+            </div>
           )
         }
         assistantTurnNum++
         return (
-          <AssistantTurnCard key={turn.uuid || i} turn={turn} turnNumber={assistantTurnNum} compactionBefore={compactionBefore} toolResults={toolResults} />
+          <div key={turn.uuid || i} data-turn={turn.uuid}>
+            <AssistantTurnCard turn={turn} turnNumber={assistantTurnNum} compactionBefore={compactionBefore} toolResults={toolResults} />
+          </div>
         )
       })}
       {turns.length > limit && (

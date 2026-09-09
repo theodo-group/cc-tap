@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AgentRun, AgentTimeline } from '@/types/claude'
 import { AgentFlameChart, OUTCOME_COLORS, BUSY_COLOR, TICK_COLOR, NUDGE_COLOR, CONTEXT_EVENT_STYLE, describeContextEvent, type MarkLayer } from './agent-flame-chart'
 import { AgentDetailsSheet } from './agent-details-sheet'
+import { OrchestratorSheet } from './orchestrator-sheet'
 import { ToolFilterBar } from './tool-filter-bar'
 import { filterColor, filterKey, filtersFromSearch, filtersToSearch, useToolSearches, type ToolFilter } from '@/lib/tool-filters'
 import type { ToolMatch } from '@/lib/tool-search'
@@ -19,6 +20,8 @@ interface Props {
   window: TimeWindow | null
   onWindowChange(w: TimeWindow | null): void
   onJumpToTurn?(uuid: string): void
+  /** Open the Replay at the orchestrator turn in progress at this time */
+  onJumpToTime?(timeMs: number): void
 }
 
 function Legend({ hasEvents }: { hasEvents: boolean }) {
@@ -39,6 +42,7 @@ function Legend({ hasEvents }: { hasEvents: boolean }) {
       <span className="flex items-center gap-1.5">
         <span className="inline-block h-3.5 w-[3px]" style={{ background: TICK_COLOR }} /> Human prompt (orchestrator row)
       </span>
+      <span className="text-muted-foreground/80">Click a bar to open the conversation at that time</span>
       <span className="flex items-center gap-1.5">
         <span className="inline-block h-3.5 w-[3px]" style={{ background: NUDGE_COLOR }} /> Message sent to the agent by its launcher
       </span>
@@ -57,9 +61,13 @@ function Legend({ hasEvents }: { hasEvents: boolean }) {
 
 const MATCH_LIST_PAGE = 100
 
-export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowChange, onJumpToTurn }: Props) {
+export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowChange, onJumpToTurn, onJumpToTime }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<AgentRun | null>(null)
+  /** Time under the pointer when the agent bar was clicked; the sheet scrolls its transcript there */
+  const [selectedAt, setSelectedAt] = useState<number | undefined>(undefined)
+  /** Time clicked on the orchestrator bar; opens the orchestrator drawer */
+  const [orchestratorAt, setOrchestratorAt] = useState<number | null>(null)
   // Zoom shows only the selected window on a linear scale
   const [zoom, setZoom] = useState(true)
 
@@ -85,7 +93,8 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
       return next
     })
   }, [])
-  const onSelect = useCallback((a: AgentRun) => setSelected(a), [])
+  const onSelect = useCallback((a: AgentRun, atMs?: number) => { setSelectedAt(atMs); setSelected(a) }, [])
+  const onOrchestratorClick = useCallback((atMs: number) => setOrchestratorAt(atMs), [])
 
   const parents = useMemo(() => new Map(timeline.agents.map(a => [a.id, a])), [timeline])
   const expandable = useMemo(() => timeline.agents.filter(a => a.children_count > 0).map(a => a.id), [timeline])
@@ -183,6 +192,7 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
             layers={layers}
             onToggle={onToggle}
             onSelect={onSelect}
+            onOrchestratorClick={onOrchestratorClick}
             onWindowChange={onWindowChange}
           />
         </div>
@@ -204,8 +214,9 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
               {matchList.slice(0, listLimit).map(m => {
                 const agent = m.agent_id ? parents.get(m.agent_id) : undefined
                 const open = () => {
-                  if (!m.agent_id) onJumpToTurn?.(m.turn_uuid)
-                  else if (agent) setSelected(agent)
+                  const at = new Date(m.timestamp).getTime()
+                  if (!m.agent_id) setOrchestratorAt(at)
+                  else if (agent) onSelect(agent, at)
                 }
                 return (
                   <li key={`${m.tool_use_id}-${m.color}`} className="flex items-baseline gap-3 py-1.5">
@@ -257,9 +268,18 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
         </div>
       )}
 
+      <OrchestratorSheet
+        sessionId={sessionId}
+        timeline={timeline}
+        atMs={orchestratorAt}
+        onClose={() => setOrchestratorAt(null)}
+        onJumpToTime={onJumpToTime ? ms => { setOrchestratorAt(null); onJumpToTime(ms) } : undefined}
+      />
+
       <AgentDetailsSheet
         sessionId={sessionId}
         agent={selected}
+        scrollToMs={selectedAt}
         parent={selected?.parent_id ? parents.get(selected.parent_id) : undefined}
         onClose={() => setSelected(null)}
         onJumpToTurn={onJumpToTurn ? uuid => { setSelected(null); onJumpToTurn(uuid) } : undefined}

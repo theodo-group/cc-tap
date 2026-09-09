@@ -17,6 +17,8 @@ interface Props {
   parent?: AgentRun
   onClose(): void
   onJumpToTurn?(uuid: string): void
+  /** Scroll the transcript to the turn in progress at this time; absent opens at the top */
+  scrollToMs?: number
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -28,7 +30,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   )
 }
 
-export function AgentDetailsSheet({ sessionId, agent, parent, onClose, onJumpToTurn }: Props) {
+export function AgentDetailsSheet({ sessionId, agent, parent, onClose, onJumpToTurn, scrollToMs }: Props) {
   const a = agent
   const start = a ? new Date(a.start).getTime() : 0
   const end = a ? new Date(a.end).getTime() : 0
@@ -100,7 +102,7 @@ export function AgentDetailsSheet({ sessionId, agent, parent, onClose, onJumpToT
                 <MessageSquare className="h-3.5 w-3.5" /> Conversation · {a.turns} assistant turns
               </h3>
               {/* Keyed by agent so a new agent starts from the top */}
-              <AgentTranscript key={a.id} sessionId={sessionId} agentId={a.id} />
+              <AgentTranscript key={a.id} sessionId={sessionId} agentId={a.id} scrollToMs={scrollToMs} />
             </div>
           </>
         )}
