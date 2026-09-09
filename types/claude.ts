@@ -160,6 +160,8 @@ export interface ReplayTurn {
   estimated_cost?: number
   turn_duration_ms?: number
   response_time_s?: number
+  /** True when a later rewind dropped this turn from the conversation */
+  discarded?: boolean
 }
 
 export interface CompactionEvent {
@@ -438,4 +440,69 @@ export interface TeamAnalytics {
   /** Every MCP server seen in member tool counts, most-used first */
   mcp_servers: TeamMcpServer[]
   errors: string[]
+}
+
+// ─── Agent Timeline ───────────────────────────────────────────────────────────
+
+export type AgentOutcome = 'completed' | 'failed' | 'killed' | 'running' | 'unknown'
+
+export interface TimeSegment {
+  start: string
+  end: string
+}
+
+export interface PromptTick {
+  timestamp: string
+  text: string
+}
+
+export interface AgentRun {
+  id: string
+  parent_id: string | null
+  depth: number
+  description: string
+  agent_type: string
+  model?: string
+  prompt: string
+  start: string
+  end: string
+  duration_ms: number
+  turns: number
+  usage: TurnUsage
+  estimated_cost: number
+  outcome: AgentOutcome
+  /** Timestamps of SendMessage calls that continued this agent */
+  nudges: string[]
+  launch_tool_use_id?: string
+  /** uuid of the assistant message in the orchestrator log that launched it (depth 1 only) */
+  launch_turn_uuid?: string
+  children_count: number
+}
+
+export type ContextEventType = 'compact' | 'clear' | 'rewind'
+
+export interface ContextEvent {
+  type: ContextEventType
+  timestamp: string
+  uuid: string
+  /** compact */
+  trigger?: 'auto' | 'manual'
+  pre_tokens?: number
+  post_tokens?: number
+  duration_ms?: number
+  /** rewind */
+  rewound_to_uuid?: string
+  discarded_turns?: number
+}
+
+export interface AgentTimeline {
+  session_id: string
+  start: string
+  end: string
+  orchestrator: {
+    busy: TimeSegment[]
+    prompts: PromptTick[]
+  }
+  agents: AgentRun[]
+  context_events: ContextEvent[]
 }

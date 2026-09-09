@@ -9,6 +9,24 @@ This project follows a simple changelog format:
 - `Fixed` for bug fixes
 - `Security` for vulnerability fixes or privacy hardening
 
+## Unreleased
+
+### Added
+
+- **Agents tab on the session page.** A flame-style timeline of the orchestrator and every sub-agent it launched: one row per agent, bars colored by outcome (completed, failed or killed, running, unknown), orange ticks for human prompts on the orchestrator row and for `SendMessage` nudges on agent rows, nested sub-agents that expand on click, a duration column, and a clock axis that collapses idle gaps longer than 30 minutes. Clicking a row opens a details sheet (type, model, tokens, cost, prompt) with a link that jumps to the launching turn in the Replay tab. The tab only appears when the session has agent transcripts.
+- New API route `GET /api/sessions/[id]/agents` backed by `lib/agent-timeline.ts`, which reads the orchestrator JSONL plus the `<session>/subagents/*.jsonl` and `.meta.json` files, and links agents to their launching `Agent` tool call, parent agent, and `task-notification` status.
+- **Context-management markers.** The agents payload now carries `context_events`: compactions (from `compact_boundary` lines), `/clear` commands, and rewinds. A rewind has no marker in the log, so it is detected as a fork in the `parentUuid` chain; the discarded turns are flagged `discarded` in the replay data, shown dimmed under a "REWIND" band, and still counted in cost. The flame chart draws each event as a dashed vertical line and lists them under the chart.
+- **Time window.** Drag across the flame chart, or use the window bar above the stat cards (presets for activity blocks and prompt-to-prompt ranges, plus editable from/to fields), to focus on a range. Every metric on the page follows the window: stat cards, sidebar, token chart, the replay list, the Agents badge and summary. The range is stored in the URL as `?from=&to=` so a link can be shared.
+- **Tool call filters.** In the Agents tab, add any number of filters such as `pnpm ci-verify`. Every word must appear, case-insensitively, in the tool name and input, and a quoted part such as `"pnpm ci-verify"` must appear as that exact phrase; a per-filter toggle also searches the tool results. Each filter is a colored layer: bars at every matching call, spanning the call to its result on the orchestrator and agent rows, a count per row in the right column (collapsed parents roll up their sub-agents as `own+children`), a total in the chip, and a combined match list that jumps to the launching turn or opens the agent. Counts follow the selected window. Filters live in the URL as `?f=` and `?fr=`.
+- New API route `GET /api/sessions/[id]/search?q=&scope=input|all` backed by `lib/tool-search.ts`, which scans the orchestrator and every sub-agent transcript.
+- **Sub-agent conversation in the drawer.** Opening an agent from the flame chart or the match list now shows its full transcript under the details, rendered with the Replay turn cards and paged 60 turns at a time. New route `GET /api/sessions/[id]/agents/[agentId]` parses `<session>/subagents/agent-<id>.jsonl` with the replay parser.
+- **Time cursor.** Moving the pointer over the Agents chart draws a vertical line at that instant with its clock time, and the hover card shows the exact time under the pointer.
+- **Zoom to window.** With a window selected, the Agents chart zooms by default: only the selected range is drawn, on a linear scale, and rows outside it are hidden. A toggle switches back to the whole session with out-of-window rows dimmed. Dragging while zoomed narrows the window further.
+
+### Fixed
+
+- The flame chart hover card could describe a different row than the one under the cursor. Each row now owns its hover and click through a full-width band, and the card is positioned by the chart wrapper.
+
 ## 0.8.0
 
 Fixes `npx cc-tap` being broken at 0.7.0.
