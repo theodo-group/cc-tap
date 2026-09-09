@@ -105,7 +105,7 @@ function SidebarContents({
             <span
               className="dark:[text-shadow:0_1px_0_#5c2a0c,0_2px_0_#3d1c08,0_3px_6px_rgba(0,0,0,0.35)] [text-shadow:0_1px_0_rgba(255,255,255,0.4)]"
             >
-              CC Lens
+              CC Tap
             </span>
           </span>
         )}
