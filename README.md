@@ -1,4 +1,4 @@
-![cc-lens CLI](./public/cc-lens.png)
+![cc-tap CLI](./public/cc-tap.png)
 
 # Claude Code Lens (cc-tap)
 
