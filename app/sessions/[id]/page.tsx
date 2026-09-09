@@ -17,7 +17,7 @@ import { RawApiTab } from '@/components/sessions/raw-api/raw-api-tab'
 import { AgentTimelineTab } from '@/components/sessions/agents/agent-timeline-tab'
 import { TimeWindowBar } from '@/components/sessions/time-window-bar'
 import { inWindow, intersectsWindow, windowFromSearch, windowToSearch, type TimeWindow } from '@/lib/time-window'
-import { AlertTriangle, MessageSquare, Coins, DollarSign, Clock, Zap, Radio, Bot, Undo2 } from 'lucide-react'
+import { AlertTriangle, MessageSquare, Coins, DollarSign, Clock, Zap, Radio, Bot, Undo2, Loader2 } from 'lucide-react'
 
 const fetcher = (url: string) =>
   fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
@@ -275,15 +275,15 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
               <MessageSquare className="h-4 w-4" />
               Replay
             </TabsTrigger>
-            {timeline && (
-              <TabsTrigger value="agents" className="gap-2">
-                <Bot className="h-4 w-4" />
-                Agents
-                {agentCount > 0 && (
-                  <span className="rounded-full bg-muted px-1.5 text-[10px] tabular-nums text-muted-foreground">{agentCount}</span>
-                )}
-              </TabsTrigger>
-            )}
+            {/* Always present; the agents payload is the slowest fetch, so the badge shows a spinner until it lands */}
+            <TabsTrigger value="agents" className="gap-2">
+              <Bot className="h-4 w-4" />
+              Agents
+              {!timeline && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" aria-label="Loading agents" />}
+              {timeline && agentCount > 0 && (
+                <span className="rounded-full bg-muted px-1.5 text-[10px] tabular-nums text-muted-foreground">{agentCount}</span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="raw" className="gap-2">
               <Radio className="h-4 w-4" />
               Raw API
@@ -352,13 +352,18 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </TabsContent>
 
-        {timeline && (
-          <TabsContent value="agents" className="flex-1 overflow-y-auto data-[state=inactive]:hidden">
-            {tab === 'agents' && (
-              <AgentTimelineTab sessionId={id} timeline={timeline} window={win} onWindowChange={onWindowChange} onJumpToTurn={jumpToTurn} />
-            )}
-          </TabsContent>
-        )}
+        <TabsContent value="agents" className="flex-1 overflow-y-auto data-[state=inactive]:hidden">
+          {tab === 'agents' && !timeline && (
+            <div className="space-y-4 px-4 py-5 md:px-6">
+              <Skeleton className="h-5 w-72 rounded" />
+              <Skeleton className="h-4 w-full max-w-3xl rounded" />
+              <Skeleton className="h-64 rounded-xl" />
+            </div>
+          )}
+          {tab === 'agents' && timeline && (
+            <AgentTimelineTab sessionId={id} timeline={timeline} window={win} onWindowChange={onWindowChange} onJumpToTurn={jumpToTurn} />
+          )}
+        </TabsContent>
 
         <TabsContent value="raw" className="flex-1 overflow-y-auto data-[state=inactive]:hidden">
           <RawApiTab sessionId={id} />
