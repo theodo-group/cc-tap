@@ -1,6 +1,9 @@
 'use client'
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
+/** Turns rendered at once in the Replay; more are appended as the reader scrolls */
+const TURN_PAGE = 100
 import useSWR from 'swr'
 import { TopBar } from '@/components/layout/top-bar'
 import { SessionSidebar } from '@/components/sessions/replay/session-sidebar'
@@ -70,6 +73,19 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
   }, [replayData, win])
 
   const [tab, setTab] = useState('replay')
+  // ─── Replay pagination: a 2000-turn session would otherwise block the main thread for seconds
+  const [visibleTurns, setVisibleTurns] = useState(TURN_PAGE)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const io = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) setVisibleTurns(n => n + TURN_PAGE)
+    }, { rootMargin: '600px 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [view])
+
   const jumpRef = useRef<string | null>(null)
   useEffect(() => {
     if (tab !== 'replay' || !jumpRef.current) return
@@ -86,7 +102,13 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
     const t2 = setTimeout(() => el?.classList.remove('ring-2', 'ring-primary', 'rounded-xl'), 3500)
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [tab])
-  const jumpToTurn = (uuid: string) => { jumpRef.current = uuid; setTab('replay') }
+  const jumpToTurn = (uuid: string) => {
+    jumpRef.current = uuid
+    // Make sure the target turn is rendered before the scroll runs
+    const idx = view?.turns.findIndex(t => t.uuid === uuid) ?? -1
+    if (idx >= 0) setVisibleTurns(n => Math.max(n, idx + 20))
+    setTab('replay')
+  }
 
   if (replayError) {
     return (
@@ -299,7 +321,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
               {win && replay.turns.length === 0 && (
                 <p className="py-10 text-center text-sm text-muted-foreground">No turns in the selected window.</p>
               )}
-              {replay.turns.map((turn, i) => {
+              {replay.turns.slice(0, visibleTurns).map((turn, i) => {
                 const compactionBefore = compactionByTurnIndex.get(i)
                 const startsDiscarded = turn.discarded && !replay.turns[i - 1]?.discarded
                 const discardedBand = startsDiscarded ? (
@@ -338,6 +360,18 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                 )
               })}
+              {replay.turns.length > visibleTurns && (
+                <div ref={sentinelRef} className="flex items-center justify-center gap-3 py-6 text-sm text-muted-foreground">
+                  <span>{replay.turns.length - visibleTurns} more turns</span>
+                  <button
+                    type="button"
+                    className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+                    onClick={() => setVisibleTurns(replay.turns.length)}
+                  >
+                    Show all
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Sidebar */}
