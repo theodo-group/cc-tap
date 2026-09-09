@@ -20,6 +20,7 @@ import { RawApiTab } from '@/components/sessions/raw-api/raw-api-tab'
 import { AgentTimelineTab } from '@/components/sessions/agents/agent-timeline-tab'
 import { TimeWindowBar } from '@/components/sessions/time-window-bar'
 import { inWindow, intersectsWindow, windowFromSearch, windowToSearch, type TimeWindow } from '@/lib/time-window'
+import { turnAtTime, flashTurn } from '@/lib/turn-at-time'
 import { AlertTriangle, MessageSquare, Coins, DollarSign, Clock, Zap, Radio, Bot, Undo2, Loader2 } from 'lucide-react'
 
 const fetcher = (url: string) =>
@@ -91,23 +92,26 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
     if (tab !== 'replay' || !jumpRef.current) return
     const uuid = jumpRef.current
     jumpRef.current = null
-    let el: HTMLElement | null = null
+    let undo: (() => void) | undefined
     // Wait for the details sheet to close and the tab panel to lay out
     const t1 = setTimeout(() => {
-      el = document.getElementById(`turn-${uuid}`)
-      if (!el) return
-      el.scrollIntoView({ block: 'center' })
-      el.classList.add('ring-2', 'ring-primary', 'rounded-xl')
+      const el = document.getElementById(`turn-${uuid}`)
+      if (el) undo = flashTurn(el)
     }, 400)
-    const t2 = setTimeout(() => el?.classList.remove('ring-2', 'ring-primary', 'rounded-xl'), 3500)
-    return () => { clearTimeout(t1); clearTimeout(t2) }
+    return () => { clearTimeout(t1); undo?.() }
   }, [tab])
   const jumpToTurn = (uuid: string) => {
     jumpRef.current = uuid
-    // Make sure the target turn is rendered before the scroll runs
-    const idx = view?.turns.findIndex(t => t.uuid === uuid) ?? -1
+    // Make sure the target turn is rendered before the scroll runs. The list shows the
+    // whole session, window or not, so the index is taken on the full turn list.
+    const idx = replayData?.turns.findIndex(t => t.uuid === uuid) ?? -1
     if (idx >= 0) setVisibleTurns(n => Math.max(n, idx + 20))
     setTab('replay')
+  }
+  /** Open the Replay at the orchestrator turn that was in progress at `timeMs` */
+  const jumpToTime = (timeMs: number) => {
+    const t = replayData ? turnAtTime(replayData.turns, timeMs) : undefined
+    if (t) jumpToTurn(t.uuid)
   }
 
   if (replayError) {
@@ -159,9 +163,13 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
   const discardedTurns = replay.turns.filter(t => t.type === 'assistant' && t.discarded).length
   const durationMinutes = win ? (win.to - win.from) / 60_000 : (meta?.duration_minutes ?? 0)
 
+  // The turn list always shows the whole session; turns outside the window are dimmed.
+  // A jump from the Agents tab can then land on any turn while the window stays selected.
+  const allTurns = replayData.turns
+
   // Build tool results map: tool_use_id -> result (from user turns)
   const toolResults = new Map<string, { content: string; is_error: boolean }>()
-  for (const t of replay.turns) {
+  for (const t of allTurns) {
     if (t.type === 'user' && t.tool_results) {
       for (const r of t.tool_results) {
         toolResults.set(r.tool_use_id, { content: r.content, is_error: r.is_error })
@@ -170,7 +178,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
   }
 
   // Build compaction map: index of turn before which a compaction occurred
-  const compactionByTurnIndex = new Map(replay.compactions.map(c => [c.turn_index, c]))
+  const compactionByTurnIndex = new Map(replayData.compactions.map(c => [c.turn_index, c]))
 
   let assistantTurnNum = 0
 
@@ -319,11 +327,11 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
             {/* Conversation replay */}
             <div className="flex-1 min-w-0 overflow-y-auto px-4 py-6 max-w-6xl">
               {win && replay.turns.length === 0 && (
-                <p className="py-10 text-center text-sm text-muted-foreground">No turns in the selected window.</p>
+                <p className="py-3 text-center text-sm text-muted-foreground">No turns in the selected window. The whole session is shown dimmed.</p>
               )}
-              {replay.turns.slice(0, visibleTurns).map((turn, i) => {
+              {allTurns.slice(0, visibleTurns).map((turn, i) => {
                 const compactionBefore = compactionByTurnIndex.get(i)
-                const startsDiscarded = turn.discarded && !replay.turns[i - 1]?.discarded
+                const startsDiscarded = turn.discarded && !allTurns[i - 1]?.discarded
                 const discardedBand = startsDiscarded ? (
                   <div className="my-3 flex items-center gap-2 rounded-lg border border-purple-400/40 bg-purple-500/10 px-4 py-2 text-sm text-purple-300">
                     <Undo2 className="h-4 w-4" />
@@ -331,7 +339,8 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                     <span className="text-purple-300/80">the turns below were discarded. Their tokens still count.</span>
                   </div>
                 ) : null
-                const wrapClass = turn.discarded ? 'opacity-50 saturate-50' : undefined
+                const outsideWindow = !inWindow(turn.timestamp, win)
+                const wrapClass = [turn.discarded && 'opacity-50 saturate-50', outsideWindow && 'opacity-40'].filter(Boolean).join(' ') || undefined
 
                 if (turn.type === 'user') {
                   return (
@@ -360,13 +369,13 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                 )
               })}
-              {replay.turns.length > visibleTurns && (
+              {allTurns.length > visibleTurns && (
                 <div ref={sentinelRef} className="flex items-center justify-center gap-3 py-6 text-sm text-muted-foreground">
-                  <span>{replay.turns.length - visibleTurns} more turns</span>
+                  <span>{allTurns.length - visibleTurns} more turns</span>
                   <button
                     type="button"
                     className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
-                    onClick={() => setVisibleTurns(replay.turns.length)}
+                    onClick={() => setVisibleTurns(allTurns.length)}
                   >
                     Show all
                   </button>
@@ -395,7 +404,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
             </div>
           )}
           {tab === 'agents' && timeline && (
-            <AgentTimelineTab sessionId={id} timeline={timeline} window={win} onWindowChange={onWindowChange} onJumpToTurn={jumpToTurn} />
+            <AgentTimelineTab sessionId={id} timeline={timeline} window={win} onWindowChange={onWindowChange} onJumpToTurn={jumpToTurn} onJumpToTime={jumpToTime} />
           )}
         </TabsContent>
 
