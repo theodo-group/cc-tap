@@ -96,7 +96,10 @@ interface Props {
   zoom: boolean
   layers: MarkLayer[]
   onToggle(agentId: string): void
-  onSelect(agent: AgentRun): void
+  /** `atMs` is the time under the pointer when the bar was clicked; absent for a click on the label */
+  onSelect(agent: AgentRun, atMs?: number): void
+  /** Click on the orchestrator bar, with the time under the pointer */
+  onOrchestratorClick?(atMs: number): void
   onWindowChange(w: TimeWindow | null): void
 }
 
@@ -196,7 +199,10 @@ export function buildRows(
 
 interface ShapeCallbacks {
   onHover(row: ChartRow | null): void
-  onRowClick(row: ChartRow): void
+  /** `px` is the click position inside the chart wrapper, `rect` the wrapper's box */
+  onRowClick(row: ChartRow, px: number, rect: DOMRect): void
+  /** the orchestrator only opens when the page can jump to a time */
+  orchestratorClickable: boolean
 }
 
 function makeRowShape(cb: ShapeCallbacks) {
@@ -223,12 +229,17 @@ function makeRowShape(cb: ShapeCallbacks) {
     const band = background ?? { x, y, width, height }
     const enter = () => cb.onHover(payload)
 
+    const clickable = payload.kind === 'agent' || cb.orchestratorClickable
     return (
-      <g opacity={opacity} style={{ cursor: payload.kind === 'agent' ? 'pointer' : 'default' }}>
+      <g opacity={opacity} style={{ cursor: clickable ? 'pointer' : 'default' }}>
         <rect
           x={band.x} y={band.y} width={band.width} height={band.height} fill="transparent"
           onMouseEnter={enter} onMouseLeave={() => cb.onHover(null)}
-          onClick={() => cb.onRowClick(payload)}
+          onClick={e => {
+            // Locate the click on the time axis from the chart wrapper's box
+            const rect = (e.currentTarget as Element).closest('[data-flame-chart]')?.getBoundingClientRect()
+            if (rect) cb.onRowClick(payload, e.clientX - rect.left, rect)
+          }}
         />
         {payload.kind === 'orchestrator' && <rect x={x} y={barY} width={w} height={barH} rx={2} fill={BASE_COLOR} pointerEvents="none" />}
         {payload.kind === 'orchestrator'
@@ -383,7 +394,7 @@ export function describeContextEvent(e: ContextEvent): string {
 
 // ─── Chart ───────────────────────────────────────────────────────────────────
 
-export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers, onToggle, onSelect, onWindowChange }: Props) {
+export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers, onToggle, onSelect, onOrchestratorClick, onWindowChange }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [hoverRow, setHoverRow] = useState<ChartRow | null>(null)
   const [pointer, setPointer] = useState<{ left: number; top: number } | null>(null)
@@ -428,19 +439,27 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers,
 
   const RowTick = useMemo(() => makeRowTick(rowsByKey, onToggle, onSelect), [rowsByKey, onToggle, onSelect])
   const RightTick = useMemo(() => makeRightTick(rowsByKey), [rowsByKey])
-  const RowShape = useMemo(() => makeRowShape({
-    onHover: setHoverRow,
-    onRowClick: row => { if (row.agent) onSelect(row.agent) },
-  }), [onSelect])
 
-
-
-  // ─── Drag to select a time window
+  // ─── Pixel → time, shared by the drag selection and the click-to-open
   const pxToTime = useCallback((px: number, rect: DOMRect) => {
     const plotWidth = rect.width - PLOT_LEFT - PLOT_RIGHT
     const frac = Math.min(1, Math.max(0, (px - PLOT_LEFT) / plotWidth))
     return scale.toTime(frac * scale.total)
   }, [scale, PLOT_RIGHT])
+
+  // A click on a bar opens the row at the time under the pointer
+  const onRowClick = useCallback((row: ChartRow, px: number, rect: DOMRect) => {
+    const at = pxToTime(px, rect)
+    if (row.agent) onSelect(row.agent, at)
+    else if (row.kind === 'orchestrator') onOrchestratorClick?.(at)
+  }, [onSelect, onOrchestratorClick, pxToTime])
+  const RowShape = useMemo(() => makeRowShape({
+    onHover: setHoverRow,
+    orchestratorClickable: !!onOrchestratorClick,
+    onRowClick,
+  }), [onRowClick, onOrchestratorClick])
+
+  // ─── Drag to select a time window
 
   // The hover card and the cursor follow the pointer; the wrapper's own handler knows its rect
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -499,6 +518,7 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers,
   return (
     <div
       ref={wrapperRef}
+      data-flame-chart
       className="relative w-full select-none [&_.recharts-wrapper]:outline-none [&_.recharts-wrapper_*]:outline-none"
       style={{ height }}
       onMouseDown={onMouseDown}
