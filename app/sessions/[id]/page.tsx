@@ -8,20 +8,22 @@ import useSWR from 'swr'
 import { TopBar } from '@/components/layout/top-bar'
 import { SessionSidebar } from '@/components/sessions/replay/session-sidebar'
 import { UserTurnCard, AssistantTurnCard } from '@/components/sessions/replay/turn-cards'
-import { TokenAccumulationChart } from '@/components/sessions/replay/token-accumulation-chart'
 import { SessionBadges } from '@/components/sessions/session-badges'
 import { formatCost, formatTokens, formatDuration, projectDisplayName } from '@/lib/decode'
-import type { AgentTimeline, ReplayData, SessionWithFacet } from '@/types/claude'
+import type { AgentRun, AgentTimeline, ReplayData, SessionWithFacet } from '@/types/claude'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RawApiTab } from '@/components/sessions/raw-api/raw-api-tab'
 import { AgentTimelineTab } from '@/components/sessions/agents/agent-timeline-tab'
+import { AgentDetailsSheet } from '@/components/sessions/agents/agent-details-sheet'
+import { OrchestratorSheet } from '@/components/sessions/agents/orchestrator-sheet'
+import { ContextTab } from '@/components/sessions/context/context-tab'
 import { TimeWindowBar } from '@/components/sessions/time-window-bar'
 import { inWindow, intersectsWindow, windowFromSearch, windowToSearch, type TimeWindow } from '@/lib/time-window'
 import { turnAtTime, flashTurn } from '@/lib/turn-at-time'
-import { AlertTriangle, MessageSquare, Coins, DollarSign, Clock, Zap, Radio, Bot, Undo2, Loader2 } from 'lucide-react'
+import { AlertTriangle, MessageSquare, Coins, DollarSign, Clock, Zap, Radio, Bot, Undo2, Loader2, Gauge } from 'lucide-react'
 
 const fetcher = (url: string) =>
   fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
@@ -74,6 +76,16 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
   }, [replayData, win])
 
   const [tab, setTab] = useState('replay')
+
+  // ─── One pair of drawers for the whole page, opened from the Agents tab and from the Context tab
+  const [selectedAgent, setSelectedAgent] = useState<AgentRun | null>(null)
+  /** Time under the pointer when the agent was picked; the drawer scrolls its transcript there */
+  const [selectedAt, setSelectedAt] = useState<number | undefined>(undefined)
+  /** Time picked on the orchestrator; opens the orchestrator drawer */
+  const [orchestratorAt, setOrchestratorAt] = useState<number | null>(null)
+  const onSelectAgent = useCallback((a: AgentRun, atMs?: number) => { setSelectedAt(atMs); setSelectedAgent(a) }, [])
+  const onOpenOrchestratorAt = useCallback((atMs: number) => setOrchestratorAt(atMs), [])
+  const agentsById = useMemo(() => new Map((timeline?.agents ?? []).map(a => [a.id, a])), [timeline])
   // ─── Replay pagination: a 2000-turn session would otherwise block the main thread for seconds
   const [visibleTurns, setVisibleTurns] = useState(TURN_PAGE)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -314,6 +326,10 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                 <span className="rounded-full bg-muted px-1.5 text-[10px] tabular-nums text-muted-foreground">{agentCount}</span>
               )}
             </TabsTrigger>
+            <TabsTrigger value="context" className="gap-2">
+              <Gauge className="h-4 w-4" />
+              Context
+            </TabsTrigger>
             <TabsTrigger value="raw" className="gap-2">
               <Radio className="h-4 w-4" />
               Raw API
@@ -388,11 +404,6 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
               <SessionSidebar replay={replay} meta={meta} />
             </div>
           </div>
-
-          {/* Token accumulation chart */}
-          <div className="border-t border-border px-4 py-4">
-            <TokenAccumulationChart turns={replay.turns} compactions={replay.compactions} />
-          </div>
         </TabsContent>
 
         <TabsContent value="agents" className="flex-1 overflow-y-auto data-[state=inactive]:hidden">
@@ -404,7 +415,23 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
             </div>
           )}
           {tab === 'agents' && timeline && (
-            <AgentTimelineTab sessionId={id} timeline={timeline} window={win} onWindowChange={onWindowChange} onJumpToTurn={jumpToTurn} onJumpToTime={jumpToTime} />
+            <AgentTimelineTab sessionId={id} timeline={timeline} window={win} onWindowChange={onWindowChange} onSelectAgent={onSelectAgent} onOpenOrchestratorAt={onOpenOrchestratorAt} />
+          )}
+        </TabsContent>
+
+        <TabsContent value="context" className="flex-1 overflow-y-auto data-[state=inactive]:hidden">
+          {tab === 'context' && (
+            <ContextTab
+              sessionId={id}
+              replay={replayData}
+              timeline={timeline}
+              window={win}
+              onWindowChange={onWindowChange}
+              onOpenOrchestratorAt={onOpenOrchestratorAt}
+              onOpenAgentAt={onSelectAgent}
+              onJumpToTime={jumpToTime}
+              onJumpToTurn={jumpToTurn}
+            />
           )}
         </TabsContent>
 
@@ -412,6 +439,25 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
           <RawApiTab sessionId={id} />
         </TabsContent>
       </Tabs>
+
+      {timeline && (
+        <OrchestratorSheet
+          sessionId={id}
+          timeline={timeline}
+          atMs={orchestratorAt}
+          onClose={() => setOrchestratorAt(null)}
+          onJumpToTime={ms => { setOrchestratorAt(null); jumpToTime(ms) }}
+        />
+      )}
+
+      <AgentDetailsSheet
+        sessionId={id}
+        agent={selectedAgent}
+        scrollToMs={selectedAt}
+        parent={selectedAgent?.parent_id ? agentsById.get(selectedAgent.parent_id) : undefined}
+        onClose={() => setSelectedAgent(null)}
+        onJumpToTurn={uuid => { setSelectedAgent(null); jumpToTurn(uuid) }}
+      />
     </div>
   )
 }

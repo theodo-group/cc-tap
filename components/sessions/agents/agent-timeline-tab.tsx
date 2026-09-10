@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AgentRun, AgentTimeline } from '@/types/claude'
 import { AgentFlameChart, OUTCOME_COLORS, BUSY_COLOR, TICK_COLOR, NUDGE_COLOR, CONTEXT_EVENT_STYLE, describeContextEvent, type MarkLayer } from './agent-flame-chart'
-import { AgentDetailsSheet } from './agent-details-sheet'
-import { OrchestratorSheet } from './orchestrator-sheet'
 import { ToolFilterBar } from './tool-filter-bar'
 import { filterColor, filterKey, filtersFromSearch, filtersToSearch, useToolSearches, type ToolFilter } from '@/lib/tool-filters'
 import type { ToolMatch } from '@/lib/tool-search'
@@ -19,9 +17,10 @@ interface Props {
   timeline: AgentTimeline
   window: TimeWindow | null
   onWindowChange(w: TimeWindow | null): void
-  onJumpToTurn?(uuid: string): void
-  /** Open the Replay at the orchestrator turn in progress at this time */
-  onJumpToTime?(timeMs: number): void
+  /** Open the agent drawer; `atMs` scrolls its transcript to that moment */
+  onSelectAgent(agent: AgentRun, atMs?: number): void
+  /** Open the orchestrator drawer at that moment */
+  onOpenOrchestratorAt(timeMs: number): void
 }
 
 function Legend({ hasEvents }: { hasEvents: boolean }) {
@@ -61,13 +60,8 @@ function Legend({ hasEvents }: { hasEvents: boolean }) {
 
 const MATCH_LIST_PAGE = 100
 
-export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowChange, onJumpToTurn, onJumpToTime }: Props) {
+export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowChange, onSelectAgent, onOpenOrchestratorAt }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const [selected, setSelected] = useState<AgentRun | null>(null)
-  /** Time under the pointer when the agent bar was clicked; the sheet scrolls its transcript there */
-  const [selectedAt, setSelectedAt] = useState<number | undefined>(undefined)
-  /** Time clicked on the orchestrator bar; opens the orchestrator drawer */
-  const [orchestratorAt, setOrchestratorAt] = useState<number | null>(null)
   // Zoom shows only the selected window on a linear scale
   const [zoom, setZoom] = useState(true)
 
@@ -93,8 +87,8 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
       return next
     })
   }, [])
-  const onSelect = useCallback((a: AgentRun, atMs?: number) => { setSelectedAt(atMs); setSelected(a) }, [])
-  const onOrchestratorClick = useCallback((atMs: number) => setOrchestratorAt(atMs), [])
+  const onSelect = onSelectAgent
+  const onOrchestratorClick = onOpenOrchestratorAt
 
   const parents = useMemo(() => new Map(timeline.agents.map(a => [a.id, a])), [timeline])
   const expandable = useMemo(() => timeline.agents.filter(a => a.children_count > 0).map(a => a.id), [timeline])
@@ -215,8 +209,8 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
                 const agent = m.agent_id ? parents.get(m.agent_id) : undefined
                 const open = () => {
                   const at = new Date(m.timestamp).getTime()
-                  if (!m.agent_id) setOrchestratorAt(at)
-                  else if (agent) onSelect(agent, at)
+                  if (!m.agent_id) onOpenOrchestratorAt(at)
+                  else if (agent) onSelectAgent(agent, at)
                 }
                 return (
                   <li key={`${m.tool_use_id}-${m.color}`} className="flex items-baseline gap-3 py-1.5">
@@ -268,22 +262,6 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
         </div>
       )}
 
-      <OrchestratorSheet
-        sessionId={sessionId}
-        timeline={timeline}
-        atMs={orchestratorAt}
-        onClose={() => setOrchestratorAt(null)}
-        onJumpToTime={onJumpToTime ? ms => { setOrchestratorAt(null); onJumpToTime(ms) } : undefined}
-      />
-
-      <AgentDetailsSheet
-        sessionId={sessionId}
-        agent={selected}
-        scrollToMs={selectedAt}
-        parent={selected?.parent_id ? parents.get(selected.parent_id) : undefined}
-        onClose={() => setSelected(null)}
-        onJumpToTurn={onJumpToTurn ? uuid => { setSelected(null); onJumpToTurn(uuid) } : undefined}
-      />
     </div>
   )
 }
