@@ -211,7 +211,7 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Pa
               if (item.type === 'thinking') hasThinking = true
               if (item.type === 'tool_use' && item.name) {
                 toolCounts[item.name] = (toolCounts[item.name] ?? 0) + 1
-                if (item.name.startsWith('Task') || item.name === 'TodoWrite' || item.name === 'Agent') hasTaskAgent = true
+                if (item.name.startsWith('Task') || item.name === 'TodoWrite' || item.name === 'Agent' || item.name === 'Workflow') hasTaskAgent = true
                 if (item.name.startsWith('mcp__')) hasMcp = true
                 if (item.name === 'WebSearch') hasWebSearch = true
                 if (item.name === 'WebFetch') hasWebFetch = true
