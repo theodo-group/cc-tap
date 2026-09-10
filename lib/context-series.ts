@@ -3,7 +3,9 @@ import { contextLimit, type ContextLimits } from '@/lib/context-limits'
 
 /** One assistant turn, plotted on the Context chart */
 export interface ContextPoint {
-  /** 1-based position in the full turn list — the number the Replay shows */
+  /** 1-based count among assistant turns — the number the Replay prints on the
+   *  card, and the count the agent list gives as "171t". Not the position in
+   *  the full turn list, which also holds the user turns. */
   turn: number
   /** Milliseconds since epoch */
   time: number
@@ -42,8 +44,13 @@ export interface AutocompactBand {
  *  both are left out. The rest of the repo skips '<synthetic>' the same way. */
 export function buildContextSeries(turns: readonly ReplayTurn[], limits: ContextLimits): ContextPoint[] {
   const points: ContextPoint[] = []
-  turns.forEach((t, i) => {
-    if (t.type !== 'assistant' || !t.usage || t.model === '<synthetic>') return
+  // Counts every assistant turn, plotted or not, so the number stays in step
+  // with the Replay card, which counts them all.
+  let ordinal = 0
+  turns.forEach(t => {
+    if (t.type !== 'assistant') return
+    ordinal++
+    if (!t.usage || t.model === '<synthetic>') return
     // All three are disjoint parts of one prompt. Leaving cache_creation out
     // makes a cold cache — after a /login, a resume, a model switch — look like
     // the context collapsed, when the same tokens were only written instead of
@@ -53,7 +60,7 @@ export function buildContextSeries(turns: readonly ReplayTurn[], limits: Context
       + (t.usage.cache_creation_input_tokens ?? 0)
     const limit = contextLimit(t.model, limits)
     points.push({
-      turn: i + 1,
+      turn: ordinal,
       time: new Date(t.timestamp).getTime(),
       uuid: t.uuid,
       tokens,
@@ -65,10 +72,23 @@ export function buildContextSeries(turns: readonly ReplayTurn[], limits: Context
   return points
 }
 
-/** Compactions, with the timestamp needed by the time axis */
-export function buildContextMarks(compactions: readonly CompactionEvent[]): ContextMark[] {
+/** Compactions, placed on the same assistant-turn scale as the points and on
+ *  the time axis. A compaction sits before a turn, so it lands half a turn
+ *  ahead of the assistant turns that precede it. */
+export function buildContextMarks(
+  compactions: readonly CompactionEvent[],
+  turns: readonly ReplayTurn[] = [],
+): ContextMark[] {
+  // Assistant turns at or before each index, so a full-list index maps onto the
+  // assistant-turn axis
+  const ordinalBefore: number[] = []
+  let ordinal = 0
+  for (const t of turns) {
+    ordinalBefore.push(ordinal)
+    if (t.type === 'assistant') ordinal++
+  }
   return compactions.map(c => ({
-    turn: c.turn_index + 1,
+    turn: (ordinalBefore[c.turn_index] ?? ordinal) + 0.5,
     time: new Date(c.timestamp).getTime(),
     uuid: c.uuid,
     trigger: c.trigger,

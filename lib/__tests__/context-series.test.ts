@@ -39,8 +39,20 @@ describe('buildContextSeries', () => {
     expect(deltaPoints(cold).map(p => p.delta)).toEqual([-3_661, 1_532])
   })
 
-  it('numbers a point by its place in the full turn list', () => {
-    expect(buildContextSeries(turns, T).map(p => p.turn)).toEqual([2, 3])
+  it('numbers a point by its place among the assistant turns, as the Replay does', () => {
+    // turns[0] is a user turn, so the two assistant turns are #1 and #2 —
+    // not 2 and 3, which is where they sit in the full list
+    expect(buildContextSeries(turns, T).map(p => p.turn)).toEqual([1, 2])
+  })
+
+  it('counts an assistant turn it does not plot, so the numbers stay in step', () => {
+    const withGap = buildContextSeries([
+      turn({ timestamp: '2026-09-10T10:00:00.000Z', model: 'claude-opus-5', usage: usage(0, 10) }),
+      turn({ timestamp: '2026-09-10T10:00:05.000Z', model: '<synthetic>', usage: usage(0, 0) }),
+      turn({ timestamp: '2026-09-10T10:00:10.000Z', type: 'user' }),
+      turn({ timestamp: '2026-09-10T10:00:20.000Z', model: 'claude-opus-5', usage: usage(0, 20) }),
+    ], T)
+    expect(withGap.map(p => p.turn)).toEqual([1, 3])
   })
 
   it('measures the percentage against the model of that turn', () => {
@@ -91,13 +103,25 @@ describe('autocompactBand', () => {
 })
 
 describe('buildContextMarks', () => {
+  const compactionAt = (turn_index: number) => ({
+    uuid: 'c1', timestamp: '2026-09-10T10:00:05.000Z', trigger: 'manual' as const, pre_tokens: 9, turn_index,
+  })
+
   it('places a compaction on both axes', () => {
-    const [m] = buildContextMarks([{
-      uuid: 'c1', timestamp: '2026-09-10T10:00:05.000Z', trigger: 'manual', pre_tokens: 9, turn_index: 3,
-    }])
-    expect(m.turn).toBe(4)
+    const [m] = buildContextMarks([compactionAt(3)])
     expect(m.time).toBe(Date.parse('2026-09-10T10:00:05.000Z'))
     expect(m.trigger).toBe('manual')
+  })
+
+  it('lands between the assistant turns it sits between, not on the full-list index', () => {
+    // user, assistant, user, assistant: index 3 has one assistant turn before it
+    const list: ReplayTurn[] = [
+      turn({ timestamp: '2026-09-10T10:00:00.000Z', type: 'user' }),
+      turn({ timestamp: '2026-09-10T10:00:01.000Z', model: 'claude-opus-5', usage: usage(0, 1) }),
+      turn({ timestamp: '2026-09-10T10:00:02.000Z', type: 'user' }),
+      turn({ timestamp: '2026-09-10T10:00:03.000Z', model: 'claude-opus-5', usage: usage(0, 2) }),
+    ]
+    expect(buildContextMarks([compactionAt(3)], list)[0].turn).toBe(1.5)
   })
 })
 
@@ -158,7 +182,7 @@ describe('synthetic turns', () => {
     expect(buildContextSeries(turns, T).map(p => p.tokens)).toEqual([150_000, 155_000])
   })
 
-  it('keeps the real turns numbered by their place in the full list', () => {
+  it('keeps the real turns numbered as the Replay numbers them', () => {
     expect(buildContextSeries(turns, T).map(p => p.turn)).toEqual([1, 3])
   })
 
