@@ -23,7 +23,7 @@ function stripXmlTags(text: string): string {
 
 /** Map with a concurrency cap — keeps cold scans of large ~/.claude dirs from
  * holding hundreds of file streams and parse buffers in flight at once. */
-async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+export async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length)
   let next = 0
   async function worker() {
