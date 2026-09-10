@@ -10,10 +10,11 @@ import {
   ReferenceLine,
   ResponsiveContainer,
 } from 'recharts'
-import type { AgentRun, AgentOutcome, AgentTimeline, ContextEvent, ContextEventType } from '@/types/claude'
+import type { AgentRun, AgentOutcome, AgentTimeline, ContextEvent, ContextEventType, WorkflowAgentState, WorkflowRun } from '@/types/claude'
 import { buildCompressedScale, clockTicks, formatClock, formatDayClock, type CompressedScale } from '@/lib/time-scale'
 import { intersectsWindow, normalizeWindow, timelineIntervals, type TimeWindow } from '@/lib/time-window'
-import { formatDurationMs, formatTokens } from '@/lib/decode'
+import { formatCost, formatDurationMs, formatTokens } from '@/lib/decode'
+import { WORKFLOW_STATE_LABEL, groupByRun, isWorkflowFailure, phaseSpans, sortWorkflowAgents, workflowAgentLabel } from '@/lib/workflow-agents'
 
 export const OUTCOME_COLORS: Record<AgentOutcome, string> = {
   completed: '#5fb89a',
@@ -21,6 +22,15 @@ export const OUTCOME_COLORS: Record<AgentOutcome, string> = {
   killed:    '#e0824b',
   running:   '#6b8be6',
   unknown:   '#8a93a3',
+}
+/** Workflow agent states map onto the outcome palette */
+export const WORKFLOW_STATE_COLORS: Record<WorkflowAgentState, string> = {
+  done:    OUTCOME_COLORS.completed,
+  cached:  OUTCOME_COLORS.completed,
+  error:   OUTCOME_COLORS.failed,
+  blocked: OUTCOME_COLORS.failed,
+  running: OUTCOME_COLORS.running,
+  queued:  OUTCOME_COLORS.unknown,
 }
 export const BUSY_COLOR = '#6b8be6'
 export const TICK_COLOR = '#e0824b'
@@ -68,15 +78,16 @@ export interface ChartRow {
   key: string
   label: string
   depth: number
-  kind: 'orchestrator' | 'agent'
+  kind: 'orchestrator' | 'agent' | 'workflow'
   agent?: AgentRun
+  workflow?: WorkflowRun
   expandable: boolean
   expanded: boolean
   /** compressed x range of the bar */
   range: [number, number]
-  /** compressed x pairs drawn on top of the base bar (orchestrator only) */
+  /** compressed x pairs drawn on top of the base bar: busy turns on the orchestrator, phases on a workflow run */
   segments: Array<[number, number]>
-  /** compressed x of tick marks (prompts on the orchestrator, nudges on agents) */
+  /** compressed x of tick marks (prompts on the orchestrator, nudges on agents, failed agent starts on a workflow run) */
   ticks: number[]
   color: string
   durationLabel: string
@@ -100,6 +111,7 @@ interface Props {
   onSelect(agent: AgentRun, atMs?: number): void
   /** Click on the orchestrator bar, with the time under the pointer */
   onOrchestratorClick?(atMs: number): void
+  onSelectWorkflow?(run: WorkflowRun): void
   onWindowChange(w: TimeWindow | null): void
 }
 
@@ -131,6 +143,9 @@ export function buildRows(
     if (a.parent_id) children.set(a.parent_id, [...(children.get(a.parent_id) ?? []), a])
   }
   const descendants = (id: string): string[] => (children.get(id) ?? []).flatMap(k => [k.id, ...descendants(k.id)])
+  const runs = timeline.workflows ?? []
+  const runById = new Map(runs.map(w => [w.id, w]))
+  const runAgents = groupByRun(timeline.agents)
 
   /** Marks of one row: its own matches, plus those of collapsed descendants */
   const marksFor = (agentKey: string, rolledIds: string[]): RowMarks[] =>
@@ -173,7 +188,7 @@ export function buildRows(
     const kids = children.get(a.id) ?? []
     rows.push({
       key: a.id,
-      label: a.description,
+      label: workflowAgentLabel(a.workflow_id ? runById.get(a.workflow_id) : undefined, a),
       depth,
       kind: 'agent',
       agent: a,
@@ -191,7 +206,47 @@ export function buildRows(
     })
     if (expanded.has(a.id)) for (const k of kids) push(k, depth + 1)
   }
-  for (const a of timeline.agents) if (!a.parent_id) push(a, 1)
+
+  // A workflow run is a group bar over its agents; its phases are the segments
+  const pushRun = (w: WorkflowRun) => {
+    const s0 = ms(w.start), e0 = ms(w.end)
+    if (clip && !intersectsWindow(s0, e0, clip)) return
+    const s = clamp(s0), e = clamp(e0)
+    const kids = sortWorkflowAgents(runAgents.get(w.id) ?? [])
+    const open = expanded.has(w.id)
+    rows.push({
+      key: w.id,
+      label: w.name,
+      depth: 1,
+      kind: 'workflow',
+      workflow: w,
+      expandable: kids.length > 0,
+      expanded: open,
+      range: [scale.toX(s), scale.toX(e)],
+      segments: phaseSpans(w, kids)
+        .map(p => clipSeg([p.start, p.end]))
+        .filter((x): x is [number, number] => !!x)
+        .map(([a, b]) => [scale.toX(a), scale.toX(b)]),
+      ticks: kids.filter(isWorkflowFailure).map(a => ms(a.start)).filter(inside).map(t => scale.toX(t)),
+      color: OUTCOME_COLORS[w.status],
+      durationLabel: formatDurationMs(w.duration_ms),
+      startMs: s0,
+      endMs: e0,
+      dim: !clip && !intersectsWindow(s0, e0, win),
+      marks: marksFor(w.id, open ? [] : kids.map(k => k.id)),
+    })
+    if (open) for (const k of kids) push(k, 2)
+  }
+
+  // Top level: runs and plain agents interleaved by start; an agent of an unknown run stays a plain row
+  const top: Array<{ start: string; agent?: AgentRun; run?: WorkflowRun }> = [
+    ...timeline.agents.filter(a => !a.parent_id && !(a.workflow_id && runById.has(a.workflow_id))).map(a => ({ start: a.start, agent: a })),
+    ...runs.map(w => ({ start: w.start, run: w })),
+  ].sort((a, b) => a.start.localeCompare(b.start))
+  for (const t of top) {
+    if (t.run) pushRun(t.run)
+    else if (t.agent) push(t.agent, 1)
+  }
   return rows
 }
 
@@ -221,15 +276,17 @@ function makeRowShape(cb: ShapeCallbacks) {
     const w = Math.max(width, 3)
     const toPx = (v: number) => x + (v - x0) * px
     const opacity = payload.dim ? 0.25 : 1
-    const tickColor = payload.kind === 'orchestrator' ? TICK_COLOR : NUDGE_COLOR
-    const running = payload.agent?.outcome === 'running'
+    const tickColor = payload.kind === 'agent' ? NUDGE_COLOR : TICK_COLOR
+    const running = payload.kind === 'workflow' ? payload.workflow?.status === 'running' : payload.agent?.outcome === 'running'
+    const isGroup = payload.kind !== 'agent'
+    const blocked = payload.agent?.workflow_state === 'blocked'
 
     // The band owns hover and click for the whole row, so the tooltip can never
     // point at a different row than the one under the cursor.
     const band = background ?? { x, y, width, height }
     const enter = () => cb.onHover(payload)
 
-    const clickable = payload.kind === 'agent' || cb.orchestratorClickable
+    const clickable = payload.kind !== 'orchestrator' || cb.orchestratorClickable
     return (
       <g opacity={opacity} style={{ cursor: clickable ? 'pointer' : 'default' }}>
         <rect
@@ -241,12 +298,27 @@ function makeRowShape(cb: ShapeCallbacks) {
             if (rect) cb.onRowClick(payload, e.clientX - rect.left, rect)
           }}
         />
-        {payload.kind === 'orchestrator' && <rect x={x} y={barY} width={w} height={barH} rx={2} fill={BASE_COLOR} pointerEvents="none" />}
-        {payload.kind === 'orchestrator'
+        {/* A run bar is a faint base under its phase segments; with no phase to show it stands on its own */}
+        {isGroup && (
+          <rect
+            x={x} y={barY} width={w} height={barH} rx={2} pointerEvents="none"
+            fill={payload.kind === 'workflow' ? payload.color : BASE_COLOR}
+            opacity={payload.kind === 'workflow' ? (payload.segments.length > 0 ? 0.35 : 0.8) : 1}
+            className={running && payload.kind === 'workflow' && payload.segments.length === 0 ? 'animate-pulse' : undefined}
+          />
+        )}
+        {isGroup
           ? payload.segments.map(([s, e], i) => (
-              <rect key={i} x={toPx(s)} y={barY} width={Math.max((e - s) * px, 2)} height={barH} fill={BUSY_COLOR} opacity={0.9} pointerEvents="none" />
+              <rect
+                key={i} x={toPx(s)} y={barY} width={Math.max((e - s) * px, 2)} height={barH} pointerEvents="none"
+                fill={payload.kind === 'workflow' ? payload.color : BUSY_COLOR}
+                opacity={payload.kind === 'workflow' && i % 2 ? 0.6 : 0.9}
+                className={running && payload.kind === 'workflow' ? 'animate-pulse' : undefined}
+              />
             ))
-          : <rect x={x} y={barY} width={w} height={barH} rx={2} fill={payload.color} className={running ? 'animate-pulse' : undefined} pointerEvents="none" />}
+          : blocked
+            ? <rect x={x + 0.5} y={barY + 0.5} width={Math.max(w - 1, 2)} height={barH - 1} rx={2} fill={payload.color} fillOpacity={0.15} stroke={payload.color} strokeDasharray="3 2" pointerEvents="none" />
+            : <rect x={x} y={barY} width={w} height={barH} rx={2} fill={payload.color} className={running ? 'animate-pulse' : undefined} pointerEvents="none" />}
         {payload.ticks.map((t, i) => (
           <rect key={`t${i}`} x={toPx(t) - 1.5} y={barY - 3} width={3} height={barH + 6} fill={tickColor} pointerEvents="none" />
         ))}
@@ -287,27 +359,36 @@ function makeRightTick(rowsByKey: Map<string, ChartRow>) {
   }
 }
 
-function makeRowTick(rowsByKey: Map<string, ChartRow>, onToggle: (id: string) => void, onSelect: (a: AgentRun) => void) {
+function makeRowTick(rowsByKey: Map<string, ChartRow>, onToggle: (id: string) => void, onSelect: (a: AgentRun) => void, onSelectWorkflow?: (w: WorkflowRun) => void) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return function RowTick(props: any) {
     const { x, y, payload } = props as { x: number; y: number; payload: { value: string } }
     const row = rowsByKey.get(payload.value)
     if (!row) return null
     const isOrch = row.kind === 'orchestrator'
+    const isRun = row.kind === 'workflow'
     const failed = row.agent?.outcome === 'failed' || row.agent?.outcome === 'killed'
+      || row.workflow?.status === 'failed' || row.workflow?.status === 'killed'
     const indent = Math.max(0, row.depth - 1) * 14
-    const label = row.expandable ? `${row.label} · ${row.agent!.children_count}` : row.label
+    const count = row.workflow?.agent_count ?? row.agent?.children_count ?? 0
+    const failures = row.workflow ? row.workflow.error_count : 0
+    const label = row.expandable
+      ? `${row.label} · ${count}${!row.expanded && failures > 0 ? ` · ${failures} failed` : ''}`
+      : row.label
     const maxChars = Math.max(10, Math.floor((LABEL_WIDTH - 28 - indent) / 7.2))
     const shown = label.length > maxChars ? label.slice(0, maxChars - 1) + '…' : label
-    // The label opens the agent; only the chevron expands or collapses its sub-agents
-    const open = () => { if (row.agent) onSelect(row.agent) }
+    // The label opens the agent or the run; only the chevron expands or collapses the children
+    const open = () => {
+      if (row.agent) onSelect(row.agent)
+      else if (row.workflow) onSelectWorkflow?.(row.workflow)
+    }
     const toggle = (e: React.MouseEvent) => { e.stopPropagation(); onToggle(row.key) }
     return (
-      <g onClick={open} style={{ cursor: row.kind === 'agent' ? 'pointer' : 'default' }} opacity={row.dim ? 0.4 : 1}>
+      <g onClick={open} style={{ cursor: row.kind === 'agent' || (isRun && onSelectWorkflow) ? 'pointer' : 'default' }} opacity={row.dim ? 0.4 : 1}>
         <title>{label}</title>
         {row.expandable && (
           <g onClick={toggle} style={{ cursor: 'pointer' }}>
-            <title>{row.expanded ? 'Collapse sub-agents' : 'Expand sub-agents'}</title>
+            <title>{row.expanded ? (isRun ? 'Collapse workflow agents' : 'Collapse sub-agents') : (isRun ? 'Expand workflow agents' : 'Expand sub-agents')}</title>
             <rect x={x - 22 - measure(shown)} y={y - 10} width={20} height={20} fill="transparent" />
             <text x={x - 6 - measure(shown)} y={y} dy={4} textAnchor="end" fontSize={11} fill="var(--muted-foreground)">
               {row.expanded ? '▾' : '▸'}
@@ -320,7 +401,7 @@ function makeRowTick(rowsByKey: Map<string, ChartRow>, onToggle: (id: string) =>
           dy={4}
           textAnchor="end"
           fontSize={isOrch ? 13 : 12}
-          fontWeight={isOrch ? 600 : failed ? 600 : 400}
+          fontWeight={isOrch || isRun || failed ? 600 : 400}
           fill={isOrch ? 'var(--foreground)' : failed ? TICK_COLOR : row.depth > 1 ? 'var(--muted-foreground)' : 'var(--foreground)'}
         >
           {shown}
@@ -340,9 +421,12 @@ function formatClockSeconds(time: number): string {
   return `${formatDayClock(time)}:${String(d.getSeconds()).padStart(2, '0')}`
 }
 
+const snippet = (text: string | undefined, len = 120) => (text ? (text.length > len ? text.slice(0, len - 1) + '…' : text) : undefined)
+
 /** Positioned in the viewport, so a short chart or a scrolling container never clips it */
 function HoverCard({ row, left, top, cursorTime }: { row: ChartRow; left: number; top: number; cursorTime: number | null }) {
   const a = row.agent
+  const w = row.workflow
   return (
     <div
       className="pointer-events-none fixed z-50 w-[270px] rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-md"
@@ -362,9 +446,34 @@ function HoverCard({ row, left, top, cursorTime }: { row: ChartRow; left: number
           <span>{a.turns} turns</span>
           {a.nudges.length > 0 && <span style={{ color: NUDGE_COLOR }}>{a.nudges.length} message{a.nudges.length > 1 ? 's' : ''} from launcher</span>}
           {a.children_count > 0 && <span>{a.children_count} sub-agents</span>}
+          {a.workflow_phase && <span>P{a.workflow_phase_index ?? '?'} {a.workflow_phase}</span>}
+          {a.workflow_state && <span style={{ color: WORKFLOW_STATE_COLORS[a.workflow_state] }}>{WORKFLOW_STATE_LABEL[a.workflow_state]}</span>}
+          {(a.workflow_attempt ?? 1) > 1 && <span>attempt {a.workflow_attempt}</span>}
+          {a.workflow_tool_calls != null && <span>{a.workflow_tool_calls} tool calls</span>}
+          {a.has_transcript === false && <span className="italic">No transcript (never started)</span>}
         </div>
       )}
-      {!a && (
+      {a?.workflow_error && <div className="mt-1" style={{ color: OUTCOME_COLORS.failed }}>{snippet(a.workflow_error)}</div>}
+      {w && (
+        <div className="mt-1 flex flex-wrap gap-x-3 text-muted-foreground">
+          <span style={{ color: row.color }}>{w.status}</span>
+          {w.attempts > 1 && <span>{w.attempts} attempts</span>}
+          {!w.has_record && <span className="italic">record pending</span>}
+          <span>{w.agent_count} agents</span>
+          {w.done_count > 0 && <span style={{ color: OUTCOME_COLORS.completed }}>{w.done_count} done</span>}
+          {w.error_count - w.blocked_count > 0 && <span style={{ color: OUTCOME_COLORS.failed }}>{w.error_count - w.blocked_count} failed</span>}
+          {w.blocked_count > 0 && <span style={{ color: OUTCOME_COLORS.failed }}>{w.blocked_count} blocked</span>}
+          {w.running_count > 0 && <span style={{ color: OUTCOME_COLORS.running }}>{w.running_count} running</span>}
+          {w.total_tool_calls != null && <span>{w.total_tool_calls} tool calls</span>}
+          {w.total_tokens != null && <span>{formatTokens(w.total_tokens)} tokens</span>}
+          <span>{formatCost(w.estimated_cost)}</span>
+        </div>
+      )}
+      {w && w.phases.length > 0 && (
+        <div className="mt-1 text-muted-foreground">{snippet(w.phases.map(p => `P${p.index} ${p.title}`).join(' · '), 160)}</div>
+      )}
+      {w?.error && <div className="mt-1" style={{ color: OUTCOME_COLORS.failed }}>{snippet(w.error)}</div>}
+      {!a && !w && (
         <div className="mt-1 text-muted-foreground">
           {row.segments.length} active turns · {row.ticks.length} human prompts
         </div>
@@ -394,7 +503,7 @@ export function describeContextEvent(e: ContextEvent): string {
 
 // ─── Chart ───────────────────────────────────────────────────────────────────
 
-export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers, onToggle, onSelect, onOrchestratorClick, onWindowChange }: Props) {
+export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers, onToggle, onSelect, onOrchestratorClick, onSelectWorkflow, onWindowChange }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [hoverRow, setHoverRow] = useState<ChartRow | null>(null)
   const [pointer, setPointer] = useState<{ left: number; top: number } | null>(null)
@@ -437,7 +546,7 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers,
     }))
   }, [ticks, scale])
 
-  const RowTick = useMemo(() => makeRowTick(rowsByKey, onToggle, onSelect), [rowsByKey, onToggle, onSelect])
+  const RowTick = useMemo(() => makeRowTick(rowsByKey, onToggle, onSelect, onSelectWorkflow), [rowsByKey, onToggle, onSelect, onSelectWorkflow])
   const RightTick = useMemo(() => makeRightTick(rowsByKey), [rowsByKey])
 
   // ─── Pixel → time, shared by the drag selection and the click-to-open
@@ -451,8 +560,9 @@ export function AgentFlameChart({ timeline, expanded, window: win, zoom, layers,
   const onRowClick = useCallback((row: ChartRow, px: number, rect: DOMRect) => {
     const at = pxToTime(px, rect)
     if (row.agent) onSelect(row.agent, at)
+    else if (row.workflow) onSelectWorkflow?.(row.workflow)
     else if (row.kind === 'orchestrator') onOrchestratorClick?.(at)
-  }, [onSelect, onOrchestratorClick, pxToTime])
+  }, [onSelect, onOrchestratorClick, onSelectWorkflow, pxToTime])
   const RowShape = useMemo(() => makeRowShape({
     onHover: setHoverRow,
     orchestratorClickable: !!onOrchestratorClick,
