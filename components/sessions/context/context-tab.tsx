@@ -100,7 +100,7 @@ export function ContextTab({ sessionId, replay, timeline, window: win, onWindowC
 
   // ─── Series, filtered to the window
   const orchestratorPoints = useMemo(() => buildContextSeries(replay.turns, limits), [replay, limits])
-  const marks = useMemo(() => buildContextMarks(replay.compactions), [replay])
+  const marks = useMemo(() => buildContextMarks(replay.compactions, replay.turns), [replay])
   // The band describes the whole session's threshold, so it ignores the window
   const band = useMemo(() => autocompactBand(marks, orchestratorPoints), [marks, orchestratorPoints])
 

@@ -31,7 +31,7 @@ export function AgentContextPanel({ sessionId, agentId, color = 'var(--viz-sky)'
   const { data: limitData } = useSWR<{ limits: ContextLimits }>(open ? '/api/context-limits' : null, fetcher, { revalidateOnFocus: false })
 
   const points = data ? buildContextSeries(data.turns, limitData?.limits ?? {}) : []
-  const marks = data ? buildContextMarks(data.compactions) : []
+  const marks = data ? buildContextMarks(data.compactions, data.turns) : []
   const band = autocompactBand(marks, points)
 
   return (
