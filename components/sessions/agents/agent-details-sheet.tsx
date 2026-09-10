@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import type { AgentRun } from '@/types/claude'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +10,7 @@ import { formatCost, formatTokens, formatDurationMs } from '@/lib/decode'
 import { formatClock, formatDayClock } from '@/lib/time-scale'
 import { OUTCOME_COLORS } from './agent-flame-chart'
 import { AgentTranscript } from './agent-transcript'
+import { AgentContextPanel } from '@/components/sessions/context/agent-context-panel'
 import { ExternalLink, MessageSquare } from 'lucide-react'
 
 interface Props {
@@ -32,6 +34,10 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export function AgentDetailsSheet({ sessionId, agent, parent, onClose, onJumpToTurn, scrollToMs }: Props) {
   const a = agent
+  /** A point picked on the context curve. Tagged with its agent, so it is
+   *  dropped as soon as the drawer shows another one. */
+  const [picked, setPicked] = useState<{ agentId: string; at: number } | null>(null)
+  const scrollAt = picked && a && picked.agentId === a.id ? picked.at : scrollToMs
   const start = a ? new Date(a.start).getTime() : 0
   const end = a ? new Date(a.end).getTime() : 0
   const totalTokens = a
@@ -97,12 +103,16 @@ export function AgentDetailsSheet({ sessionId, agent, parent, onClose, onJumpToT
 
             <Separator />
 
+            <div className="px-4">
+              <AgentContextPanel sessionId={sessionId} agentId={a.id} onPointClick={at => setPicked({ agentId: a.id, at })} />
+            </div>
+
             <div className="px-4 pb-6">
               <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 <MessageSquare className="h-3.5 w-3.5" /> Conversation · {a.turns} assistant turns
               </h3>
               {/* Keyed by agent so a new agent starts from the top */}
-              <AgentTranscript key={a.id} sessionId={sessionId} agentId={a.id} scrollToMs={scrollToMs} />
+              <AgentTranscript key={a.id} sessionId={sessionId} agentId={a.id} scrollToMs={scrollAt} />
             </div>
           </>
         )}
