@@ -46,6 +46,8 @@ export const CONTEXT_EVENT_STYLE: Record<ContextEventType, { color: string; glyp
 }
 
 const ROW_HEIGHT = 32
+/** Matches the min-w-[720px] wrapper in the Agents tab */
+const MIN_WIDTH = 720
 export const GAP_THRESHOLD_MS = 30 * 60_000
 const LABEL_WIDTH = 300
 const DURATION_WIDTH = 72
@@ -674,8 +676,10 @@ interface ChartBodyProps {
 
 /** Memoized so that pointer tracking in the parent does not re-render Recharts */
 const ChartBody = memo(function ChartBody({ rows, scale, ticks, tickLabel, win, events, RowTick, RightTick, RowShape, rightWidth }: ChartBodyProps) {
+  // The wrapper's height is known and its width is at least the min width, so the first
+  // render has a real size instead of Recharts' -1×-1 placeholder (which logs a warning)
   return (
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: MIN_WIDTH, height: rows.length * ROW_HEIGHT + 40 }}>
         {/* accessibilityLayer off: no focus outline or keyboard tooltip on click, hover is handled by the rows */}
         <ComposedChart layout="vertical" data={rows} margin={MARGIN} barCategoryGap={0} accessibilityLayer={false}>
           <XAxis
