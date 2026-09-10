@@ -41,7 +41,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
 
   const { data: timeline } = useSWR<AgentTimeline>(`/api/sessions/${id}/agents`, fetcher, {
     // Keep polling while an agent is still running
-    refreshInterval: latest => (latest?.agents.some(a => a.outcome === 'running') ? 10_000 : 0),
+    refreshInterval: latest => (latest?.agents.some(a => a.outcome === 'running') || latest?.workflows?.some(w => w.status === 'running') ? 10_000 : 0),
   })
   // ─── Selected time window, kept in the URL (?from=&to=) so it can be shared
   const [win, setWin] = useState<TimeWindow | null>(null)
@@ -54,7 +54,11 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
     window.history.replaceState(null, '', url)
   }, [])
 
-  const agentCount = timeline?.agents.filter(a => !a.parent_id && intersectsWindow(a.start, a.end, win)).length ?? 0
+  // Top-level agents plus workflow runs; a run counts once, not once per agent
+  const agentCount = timeline
+    ? timeline.agents.filter(a => !a.parent_id && !a.workflow_id && intersectsWindow(a.start, a.end, win)).length
+      + (timeline.workflows ?? []).filter(w => intersectsWindow(w.start, w.end, win)).length
+    : 0
 
   const view = useMemo<ReplayData | null>(() => {
     if (!replayData) return null

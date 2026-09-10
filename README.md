@@ -186,6 +186,8 @@ npm run lint
 `cc-tap` reads local Claude Code files directly:
 
 - `~/.claude/projects/<slug>/*.jsonl`: session JSONL and replay data
+- `~/.claude/projects/<slug>/<session>/subagents/`: sub-agent transcripts, including `workflows/wf_*/` for Workflow runs
+- `~/.claude/projects/<slug>/<session>/workflows/`: Workflow run records and persisted scripts
 - `~/.claude/stats-cache.json`: aggregate stats when available
 - `~/.claude/usage-data/session-meta/`: session metadata fallback
 - `~/.claude/history.jsonl`: command history
