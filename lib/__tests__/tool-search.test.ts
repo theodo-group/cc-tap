@@ -97,3 +97,28 @@ describe('searchToolCalls', () => {
     expect(r).toMatchObject({ total: 0, matches: [], truncated: false })
   })
 })
+
+describe('workflow agents', () => {
+  let wdir: string
+  let wjsonl: string
+  beforeAll(async () => {
+    wdir = await mkdtemp(path.join(tmpdir(), 'tool-search-wf-'))
+    wjsonl = path.join(wdir, 'sess-wf.jsonl')
+    const run = path.join(wdir, 'sess-wf', 'subagents', 'workflows', 'wf_xxxxxxxx-111')
+    await mkdir(run, { recursive: true })
+    await writeFile(wjsonl, jsonl([call('m1', T(1), 't1', 'Bash', { command: 'pnpm ci-verify' })]))
+    await writeFile(path.join(run, 'agent-a5555555555555555.meta.json'), JSON.stringify({ agentType: 'workflow-subagent', description: 'audit:one', workflowPhase: 'Audit' }))
+    await writeFile(path.join(run, 'agent-a5555555555555555.jsonl'), jsonl([call('w1', T(2), 'tw', 'Bash', { command: 'pnpm ci-verify --wf' })]))
+    await writeFile(path.join(run, 'journal.jsonl'), '{"type":"launched"}\n')
+  })
+  afterAll(async () => { await rm(wdir, { recursive: true, force: true }) })
+
+  it('searches the transcripts of workflow agents and tags the matches with the run', async () => {
+    const r = await searchToolCalls(wjsonl, 'sess-wf', 'ci-verify')
+    expect(r.total).toBe(2)
+    expect(r.matches.map(m => [m.agent_id, m.agent_description, m.workflow_id])).toEqual([
+      [null, undefined, undefined],
+      ['a5555555555555555', 'audit:one', 'wf_xxxxxxxx-111'],
+    ])
+  })
+})

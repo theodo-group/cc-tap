@@ -1,6 +1,5 @@
-import path from 'path'
-import { readdir, readFile } from 'fs/promises'
 import { readJSONLLines } from '@/lib/claude-reader'
+import { listSubagentFiles, readAgentMeta } from '@/lib/subagent-files'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyLine = Record<string, any>
@@ -11,6 +10,8 @@ export interface ToolMatch {
   /** null for the orchestrator */
   agent_id: string | null
   agent_description?: string
+  /** wf_ run id when the agent was started by a Workflow run */
+  workflow_id?: string
   timestamp: string
   /** timestamp of the tool result, when one was recorded */
   end_timestamp?: string
@@ -148,16 +149,10 @@ export async function searchToolCalls(
   let total = 0
   if (words.length === 0) return { query, scope, total: 0, matches, truncated: false }
 
-  const subDir = path.join(path.dirname(jsonlPath), sessionId, 'subagents')
-  let entries: string[] = []
-  try { entries = await readdir(subDir) } catch { /* no agents */ }
-  const agentIds = entries.filter(f => f.startsWith('agent-') && f.endsWith('.jsonl')).map(f => f.slice(6, -6))
-
-  const transcripts: Array<{ agentId: string | null; file: string; description?: string }> = [{ agentId: null, file: jsonlPath }]
-  for (const id of agentIds) {
-    let description: string | undefined
-    try { description = JSON.parse(await readFile(path.join(subDir, `agent-${id}.meta.json`), 'utf-8')).description } catch { /* optional */ }
-    transcripts.push({ agentId: id, file: path.join(subDir, `agent-${id}.jsonl`), description })
+  const transcripts: Array<{ agentId: string | null; file: string; description?: string; workflowId?: string }> = [{ agentId: null, file: jsonlPath }]
+  for (const f of await listSubagentFiles(jsonlPath, sessionId)) {
+    const { description } = await readAgentMeta(f.meta)
+    transcripts.push({ agentId: f.id, file: f.jsonl, description, workflowId: f.workflowId })
   }
 
   for (const t of transcripts) {
@@ -172,6 +167,7 @@ export async function searchToolCalls(
       matches.push({
         agent_id: t.agentId,
         agent_description: t.description,
+        workflow_id: t.workflowId,
         timestamp: c.timestamp,
         end_timestamp: res?.timestamp || undefined,
         tool: c.name,
