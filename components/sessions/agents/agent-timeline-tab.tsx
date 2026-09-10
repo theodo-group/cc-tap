@@ -1,12 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { AgentRun, AgentTimeline } from '@/types/claude'
+import type { AgentRun, AgentTimeline, WorkflowRun } from '@/types/claude'
 import { AgentFlameChart, OUTCOME_COLORS, BUSY_COLOR, TICK_COLOR, NUDGE_COLOR, CONTEXT_EVENT_STYLE, describeContextEvent, type MarkLayer } from './agent-flame-chart'
 import { AgentDetailsSheet } from './agent-details-sheet'
+import { WorkflowDetailsSheet } from './workflow-details-sheet'
 import { OrchestratorSheet } from './orchestrator-sheet'
 import { ToolFilterBar } from './tool-filter-bar'
 import { filterColor, filterKey, filtersFromSearch, filtersToSearch, useToolSearches, type ToolFilter } from '@/lib/tool-filters'
+import { groupByRun, isBlocked, sortWorkflowAgents } from '@/lib/workflow-agents'
 import type { ToolMatch } from '@/lib/tool-search'
 import { Button } from '@/components/ui/button'
 import { formatDayClock, formatClock } from '@/lib/time-scale'
@@ -24,7 +26,7 @@ interface Props {
   onJumpToTime?(timeMs: number): void
 }
 
-function Legend({ hasEvents }: { hasEvents: boolean }) {
+function Legend({ hasEvents, hasWorkflows }: { hasEvents: boolean; hasWorkflows: boolean }) {
   const items: Array<[string, string]> = [
     ['Orchestrator active', BUSY_COLOR],
     ['Completed', OUTCOME_COLORS.completed],
@@ -39,8 +41,22 @@ function Legend({ hasEvents }: { hasEvents: boolean }) {
           <span className="inline-block h-2.5 w-4 rounded-sm" style={{ background: color }} /> {label}
         </span>
       ))}
+      {hasWorkflows && (
+        <span className="flex items-center gap-1.5">
+          <span className="inline-flex h-2.5 w-4 overflow-hidden rounded-sm">
+            <span className="h-full w-1/2" style={{ background: OUTCOME_COLORS.completed, opacity: 0.9 }} />
+            <span className="h-full w-1/2" style={{ background: OUTCOME_COLORS.completed, opacity: 0.6 }} />
+          </span>
+          Workflow run (phases alternate)
+        </span>
+      )}
+      {hasWorkflows && (
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-4 rounded-sm border border-dashed" style={{ borderColor: OUTCOME_COLORS.failed, background: `${OUTCOME_COLORS.failed}26` }} /> Blocked (never started)
+        </span>
+      )}
       <span className="flex items-center gap-1.5">
-        <span className="inline-block h-3.5 w-[3px]" style={{ background: TICK_COLOR }} /> Human prompt (orchestrator row)
+        <span className="inline-block h-3.5 w-[3px]" style={{ background: TICK_COLOR }} /> Human prompt (orchestrator){hasWorkflows ? ' · failed agent start (workflow run)' : ''}
       </span>
       <span className="text-muted-foreground/80">Click a bar to open the conversation at that time</span>
       <span className="flex items-center gap-1.5">
@@ -62,8 +78,11 @@ function Legend({ hasEvents }: { hasEvents: boolean }) {
 const MATCH_LIST_PAGE = 100
 
 export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowChange, onJumpToTurn, onJumpToTime }: Props) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const runs = useMemo(() => timeline.workflows ?? [], [timeline])
+  // A lone run opens expanded; several stay collapsed, each bar carrying its counts
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(runs.length === 1 ? [runs[0].id] : []))
   const [selected, setSelected] = useState<AgentRun | null>(null)
+  const [selectedRun, setSelectedRun] = useState<WorkflowRun | null>(null)
   /** Time under the pointer when the agent bar was clicked; the sheet scrolls its transcript there */
   const [selectedAt, setSelectedAt] = useState<number | undefined>(undefined)
   /** Time clicked on the orchestrator bar; opens the orchestrator drawer */
@@ -93,11 +112,20 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
       return next
     })
   }, [])
-  const onSelect = useCallback((a: AgentRun, atMs?: number) => { setSelectedAt(atMs); setSelected(a) }, [])
+  const onSelect = useCallback((a: AgentRun, atMs?: number) => { setSelectedRun(null); setSelectedAt(atMs); setSelected(a) }, [])
+  const onSelectWorkflow = useCallback((w: WorkflowRun) => { setSelected(null); setSelectedRun(w) }, [])
   const onOrchestratorClick = useCallback((atMs: number) => setOrchestratorAt(atMs), [])
 
   const parents = useMemo(() => new Map(timeline.agents.map(a => [a.id, a])), [timeline])
-  const expandable = useMemo(() => timeline.agents.filter(a => a.children_count > 0).map(a => a.id), [timeline])
+  const runById = useMemo(() => new Map(runs.map(w => [w.id, w])), [runs])
+  const runAgents = useMemo(() => {
+    const grouped = groupByRun(timeline.agents)
+    return new Map([...grouped].map(([id, list]) => [id, sortWorkflowAgents(list)]))
+  }, [timeline])
+  const expandable = useMemo(
+    () => [...timeline.agents.filter(a => a.children_count > 0).map(a => a.id), ...runs.filter(w => w.agent_count > 0).map(w => w.id)],
+    [timeline, runs],
+  )
 
   // Everything below respects the selected window: an agent counts when its lifetime overlaps it
   const visibleAgents = useMemo(() => timeline.agents.filter(a => intersectsWindow(a.start, a.end, win)), [timeline, win])
@@ -134,12 +162,17 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
   }, [filters, searches, win])
 
   const stats = useMemo(() => {
-    const top = visibleAgents.filter(a => !a.parent_id)
+    const plain = visibleAgents.filter(a => !a.workflow_id)
+    const top = plain.filter(a => !a.parent_id)
+    const wfAgents = visibleAgents.filter(a => a.workflow_id)
+    const visibleRuns = runs.filter(w => intersectsWindow(w.start, w.end, win))
     const cost = visibleAgents.reduce((s, a) => s + a.estimated_cost, 0)
-    const failed = visibleAgents.filter(a => a.outcome === 'failed' || a.outcome === 'killed').length
-    const running = visibleAgents.filter(a => a.outcome === 'running').length
-    return { top: top.length, total: visibleAgents.length, cost, failed, running }
-  }, [visibleAgents])
+    const blocked = wfAgents.filter(isBlocked).length
+    const failed = visibleAgents.filter(a => (a.outcome === 'failed' || a.outcome === 'killed') && !isBlocked(a)).length
+    const running = visibleAgents.filter(a => a.outcome === 'running').length + visibleRuns.filter(w => w.status === 'running').length
+    return { top: top.length, sub: plain.length - top.length, runs: visibleRuns.length, wfAgents: wfAgents.length, cost, failed, blocked, running }
+  }, [visibleAgents, runs, win])
+  const empty = timeline.agents.length === 0 && runs.length === 0
 
   const start = win?.from ?? new Date(timeline.start).getTime()
   const end = win?.to ?? new Date(timeline.end).getTime()
@@ -149,12 +182,18 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
     <div className="flex flex-col gap-4 px-4 py-5 md:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm">
-          {timeline.agents.length === 0 && (
-            <span className="inline-flex items-center gap-1.5 text-muted-foreground"><Bot className="h-4 w-4" /> No sub-agents in this session</span>
+          {empty && (
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground"><Bot className="h-4 w-4" /> No sub-agents or workflow runs in this session</span>
           )}
-          {timeline.agents.length > 0 && <span className="font-medium">{stats.top} agents</span>}
-          {stats.total > stats.top && <span className="text-muted-foreground"> · {stats.total - stats.top} sub-agents</span>}
+          {!empty && (
+            <span className="font-medium">
+              {[stats.top > 0 && `${stats.top} agent${stats.top === 1 ? '' : 's'}`, stats.runs > 0 && `${stats.runs} workflow run${stats.runs === 1 ? '' : 's'}`].filter(Boolean).join(' · ') || '0 agents'}
+            </span>
+          )}
+          {stats.sub > 0 && <span className="text-muted-foreground"> · {stats.sub} sub-agents</span>}
+          {stats.wfAgents > 0 && <span className="text-muted-foreground"> · {stats.wfAgents} workflow agents</span>}
           {stats.failed > 0 && <span style={{ color: OUTCOME_COLORS.failed }}> · {stats.failed} failed</span>}
+          {stats.blocked > 0 && <span style={{ color: OUTCOME_COLORS.failed }}> · {stats.blocked} blocked</span>}
           {stats.running > 0 && <span style={{ color: OUTCOME_COLORS.running }}> · {stats.running} running</span>}
           <span className="text-muted-foreground"> · agents cost {formatCost(stats.cost)}</span>
           {win && <span className="text-muted-foreground"> · in the selected window</span>}
@@ -178,7 +217,7 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
         </div>
       </div>
 
-      <Legend hasEvents={timeline.context_events.length > 0} />
+      <Legend hasEvents={timeline.context_events.length > 0} hasWorkflows={runs.length > 0} />
 
       <ToolFilterBar filters={filters} states={searches} countsInWindow={countsInWindow} hasWindow={!!win} onChange={onFiltersChange} />
 
@@ -193,6 +232,7 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
             onToggle={onToggle}
             onSelect={onSelect}
             onOrchestratorClick={onOrchestratorClick}
+            onSelectWorkflow={onSelectWorkflow}
             onWindowChange={onWindowChange}
           />
         </div>
@@ -281,8 +321,19 @@ export function AgentTimelineTab({ sessionId, timeline, window: win, onWindowCha
         agent={selected}
         scrollToMs={selectedAt}
         parent={selected?.parent_id ? parents.get(selected.parent_id) : undefined}
+        workflow={selected?.workflow_id ? runById.get(selected.workflow_id) : undefined}
         onClose={() => setSelected(null)}
         onJumpToTurn={onJumpToTurn ? uuid => { setSelected(null); onJumpToTurn(uuid) } : undefined}
+        onOpenWorkflow={onSelectWorkflow}
+      />
+
+      <WorkflowDetailsSheet
+        sessionId={sessionId}
+        run={selectedRun}
+        agents={selectedRun ? runAgents.get(selectedRun.id) ?? [] : []}
+        onClose={() => setSelectedRun(null)}
+        onOpenAgent={a => onSelect(a)}
+        onJumpToTurn={onJumpToTurn ? uuid => { setSelectedRun(null); onJumpToTurn(uuid) } : undefined}
       />
     </div>
   )
