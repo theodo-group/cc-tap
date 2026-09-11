@@ -320,3 +320,15 @@
 }
 .cctap-splash-l { animation-name: cctap-splash-l; }
 .cctap-splash-r { animation-name: cctap-splash-r; }
+
+/* Search hits in the session replay, painted through the CSS highlight registry */
+::highlight(replay-hit),
+::highlight(drawer-hit) {
+  background-color: color-mix(in oklch, var(--primary) 30%, transparent);
+  color: var(--foreground);
+}
+::highlight(replay-hit-current),
+::highlight(drawer-hit-current) {
+  background-color: color-mix(in oklch, var(--primary) 70%, transparent);
+  color: var(--primary-foreground);
+}
