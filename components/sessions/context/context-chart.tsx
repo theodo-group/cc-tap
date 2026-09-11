@@ -204,11 +204,13 @@ export function ContextChart({ series, marks = [], band, mode, xAxis, height = 2
 
   /** As wide as one turn allows. The width is not shared between series: they
    *  overlap rather than stand side by side, so a fourth agent costs nothing. */
-  const diffBars = useMemo(() => {
+  const barWidth = useMemo(() => {
     const rows = barData?.length ?? 0
     const per = rows && plotWidth ? Math.floor(plotWidth / rows) : 3
-    return makeDiffBars(Math.max(1, Math.min(10, per > 2 ? per - 1 : per)), rowsBySeries)
-  }, [barData, plotWidth, rowsBySeries])
+    return Math.max(1, Math.min(10, per > 2 ? per - 1 : per))
+  }, [barData, plotWidth])
+
+  const diffBars = useMemo(() => makeDiffBars(barWidth, rowsBySeries), [barWidth, rowsBySeries])
 
   const yDomain = useMemo<[number, number]>(() => {
     if (mode === 'pct') return [0, 100]
@@ -252,13 +254,28 @@ export function ContextChart({ series, marks = [], band, mode, xAxis, height = 2
     return yDomain[1] - frac * (yDomain[1] - yDomain[0])
   }, [yDomain])
 
+  /** An x where every series read zero puts no bar on the chart. Nothing is
+   *  drawn there, so nothing may be picked there either: left in, such a turn
+   *  takes the pointer from the bar beside it, and the bar can never be hit. */
+  const deadX = useMemo(() => {
+    const dead = new Set<number>()
+    if (mode === 'diff') for (const r of barData ?? []) if (!r.__scale) dead.add(r.x)
+    return dead
+  }, [barData, mode])
+
+  /** The rows that are actually drawn, and so the only ones to pick from */
+  const targets = useMemo(
+    () => (deadX.size === 0 ? rowsBySeries : rowsBySeries.map(s => ({ ...s, rows: s.rows.filter(r => !deadX.has(r.x)) }))),
+    [rowsBySeries, deadX],
+  )
+
   /** Each series' point closest to an axis value, one per curve.
    *  A curve only counts where it is actually drawn: an agent that ran for ten
    *  turns must not be selectable three hundred turns later, however close its
    *  last point sits to the pointer. Outside every span, nothing is drawn, so
    *  the plain closest point is the only answer left. */
   const candidates = useCallback((x: number) => {
-    const all = rowsBySeries
+    const all = targets
       .map(s => {
         const row = s.rows.reduce<Row | null>((best, r) => (!best || Math.abs(r.x - x) < Math.abs(best.x - x) ? r : best), null)
         if (!row) return null
@@ -268,7 +285,7 @@ export function ContextChart({ series, marks = [], band, mode, xAxis, height = 2
       .filter(Boolean) as Array<{ key: string; row: Row; label: string; color: string; emphasis?: boolean; spans: boolean }>
     const within = all.filter(c => c.spans)
     return within.length > 0 ? within : all
-  }, [rowsBySeries])
+  }, [targets])
 
   /** The curve to act on: of each series' closest point in x, the one closest
    *  in y to the pointer. Picking on x alone made a crowded chart impossible to
@@ -281,6 +298,43 @@ export function ContextChart({ series, marks = [], band, mode, xAxis, height = 2
     }
     return cands.reduce((best, c) => (Math.abs(c.row.y - y) < Math.abs(best.row.y - y) ? c : best))
   }, [candidates])
+
+  /** The diff bar under the pointer, measured in pixels against what is drawn.
+   *  A bar is a rectangle from the zero line to its delta, and every series
+   *  shares one x, so the reader aims at a shape rather than at a value. The
+   *  nearest-in-y rule alone cannot see that shape: it compares the pointer to
+   *  each bar's top, so whichever curve read closest to zero won every click,
+   *  and an agent's bar could not be opened at all. */
+  const hitBar = useCallback((px: number, py: number, rect: DOMRect) => {
+    const tol = Math.max(3, barWidth)
+    const zero = yToPy(0, rect)
+    let best: { key: string; row: Row; label: string; color: string; emphasis?: boolean } | null = null
+    for (const s of targets) {
+      for (const r of s.rows) {
+        if (Math.abs(xToPx(r.x, rect) - px) > tol) continue
+        const top = yToPy(r.y, rect)
+        if (py < Math.min(top, zero) - 2 || py > Math.max(top, zero) + 2) continue
+        // The shortest bar is the one painted in front, so it is the one aimed at
+        if (!best || Math.abs(r.y) < Math.abs(best.row.y)) {
+          best = { key: s.key, row: r, label: s.label, color: s.color, emphasis: s.emphasis }
+        }
+      }
+    }
+    return best
+  }, [targets, barWidth, xToPx, yToPy])
+
+  /** What the pointer is on: the curve to act on, and every curve at its turn.
+   *  Both the hover card and the click read this, so what you see marked is
+   *  what a click opens. */
+  const pick = useCallback((px: number, py: number | undefined, rect: DOMRect) => {
+    if (mode === 'diff' && py !== undefined) {
+      const hit = hitBar(px, py, rect)
+      if (hit) return { lead: hit, rows: candidates(hit.row.x) }
+    }
+    const x = pxToX(px, rect)
+    const lead = nearest(x, py === undefined ? undefined : pyToY(py, rect))
+    return { lead, rows: candidates(lead ? lead.row.x : x) }
+  }, [mode, hitBar, candidates, nearest, pxToX, pyToY])
 
   /** A drag always gives a time window, whichever axis is on show */
   const xToTime = useCallback((x: number) => {
@@ -335,13 +389,11 @@ export function ContextChart({ series, marks = [], band, mode, xAxis, height = 2
     const px = e.clientX - rect.left
     const py = e.clientY - rect.top
     if (px < PLOT_LEFT || px > rect.width - PLOT_RIGHT) { setCursor(null); return }
-    const x = pxToX(px, rect)
-    const rows = candidates(x)
-    const lead = nearest(x, pyToY(py, rect))
+    const { lead, rows } = pick(px, py, rect)
     setCursor({
       px,
       width: rect.width,
-      label: xAxis === 'turn' ? (lead ? `Turn ${lead.row.turn}` : '') : formatClock(x),
+      label: xAxis === 'turn' ? (lead ? `Turn ${lead.row.turn}` : '') : formatClock(lead ? lead.row.time : pxToX(px, rect)),
       leadKey: lead?.key ?? '',
       dot: lead ? { px: xToPx(lead.row.x, rect), py: yToPy(lead.row.y, rect), color: lead.color } : null,
       rows,
@@ -353,8 +405,8 @@ export function ContextChart({ series, marks = [], band, mode, xAxis, height = 2
     const rect = wrapperRef.current.getBoundingClientRect()
     const px = e.clientX - rect.left
     if (px < PLOT_LEFT || px > rect.width - PLOT_RIGHT) return
-    const n = nearest(pxToX(px, rect), pyToY(e.clientY - rect.top, rect))
-    if (n) onPointClick(n.key, n.row)
+    const { lead } = pick(px, e.clientY - rect.top, rect)
+    if (lead) onPointClick(lead.key, lead.row)
   }
 
   if (!domain) {
@@ -364,10 +416,15 @@ export function ContextChart({ series, marks = [], band, mode, xAxis, height = 2
   const bandFrom = band ? (mode === 'pct' ? band.fromPct : band.fromTokens) : 0
   const bandTo = band ? (mode === 'pct' ? band.toPct : band.toTokens) : 0
 
+  // The chart takes no pointer of its own: this wrapper does all the hit
+  // testing, and a press that lands on a bar is lost otherwise. The press
+  // re-renders the chart, Recharts rebuilds the bars, and the element the
+  // press began on is gone by the time the release comes — so the browser
+  // fires no click at all, and the bar you aimed at opens nothing.
   return (
     <div
       ref={wrapperRef}
-      className="relative w-full select-none [&_.recharts-wrapper]:outline-none [&_.recharts-wrapper_*]:outline-none"
+      className="relative w-full select-none [&_.recharts-wrapper]:pointer-events-none [&_.recharts-wrapper]:outline-none [&_.recharts-wrapper_*]:outline-none"
       style={{ height, cursor: onPointClick ? 'pointer' : 'default' }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
