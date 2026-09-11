@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4",
+    "@tanstack/react-virtual": "^3.14.11",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -1,19 +1,22 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import type { ReplayData } from '@/types/claude'
-import { UserTurnCard, AssistantTurnCard } from '@/components/sessions/replay/turn-cards'
+import { PanelTurnList } from '@/components/sessions/replay/turn-list'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 import { AlertTriangle } from 'lucide-react'
 import { turnAtTime, flashTurn } from '@/lib/turn-at-time'
+import { ReplaySearch } from '@/components/sessions/replay/replay-search'
+import { useReplaySearch } from '@/components/sessions/replay/use-replay-search'
+import { DRAWER_HIGHLIGHTS } from '@/lib/replay-highlight'
 
 const fetcher = (url: string) =>
   fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
-const PAGE = 60
+/** How long the flash waits for the virtual list to mount the turn it wants */
+const MOUNT_DEADLINE_MS = 2000
 
 interface Props {
   sessionId: string
@@ -23,46 +26,48 @@ interface Props {
   scrollToMs?: number
 }
 
-/** The conversation of one sub-agent, or of the orchestrator, rendered with the Replay turn cards */
+/** The conversation of one sub-agent, or of the orchestrator, rendered with the
+ *  Replay turn cards and searched with the Replay find bar */
 export function AgentTranscript({ sessionId, agentId, scrollToMs }: Props) {
   // The orchestrator url is the one the page already holds, so SWR serves it from cache
   const url = agentId ? `/api/sessions/${sessionId}/agents/${agentId}` : `/api/sessions/${sessionId}/replay`
   const { data, error, isLoading } = useSWR<ReplayData>(url, fetcher, {
     revalidateOnFocus: false,
   })
-  const [limit, setLimit] = useState(PAGE)
-  const listRef = useRef<HTMLDivElement>(null)
+  const [root, setRoot] = useState<HTMLDivElement | null>(null)
+  // The drawer panel is what scrolls here, not the window
+  const scroller = useMemo(() => root?.closest<HTMLElement>('[data-slot="sheet-content"]') ?? null, [root])
 
-  // Scroll to the clicked time once the turns are in the DOM
+  const toolResults = useMemo(() => {
+    const map = new Map<string, { content: string; is_error: boolean }>()
+    for (const t of data?.turns ?? []) {
+      for (const r of t.tool_results ?? []) map.set(r.tool_use_id, { content: r.content, is_error: r.is_error })
+    }
+    return map
+  }, [data])
+
+  const search = useReplaySearch(data?.turns, toolResults, { names: DRAWER_HIGHLIGHTS, root })
+
+  // The turn in progress at the clicked time: the list scrolls to it, and it
+  // flashes once the card is mounted.
   const target = useMemo(() => {
     if (scrollToMs === undefined || !data) return null
     const t = turnAtTime(data.turns, scrollToMs)
     return t ? { uuid: t.uuid, index: data.turns.indexOf(t) } : null
   }, [data, scrollToMs])
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { if (target) setLimit(n => Math.max(n, target.index + 20)) }, [target])
   useEffect(() => {
-    if (!target || limit < target.index + 1) return
+    if (!target || !root) return
+    let frame = 0
     let undo: (() => void) | undefined
-    // Wait for the sheet's open animation, so the scroll lands where it should
-    const t1 = setTimeout(() => {
-      const el = listRef.current?.querySelector<HTMLElement>(`[data-turn="${target.uuid}"]`)
-      if (el) undo = flashTurn(el)
-    }, 350)
-    return () => { clearTimeout(t1); undo?.() }
-    // A new limit re-renders the same target; only a new target must scroll again
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target, limit >= (target?.index ?? 0) + 1])
-
-  const toolResults = useMemo(() => {
-    const map = new Map<string, { content: string; is_error: boolean }>()
-    for (const t of data?.turns ?? []) {
-      if (t.type === 'user' && t.tool_results) {
-        for (const r of t.tool_results) map.set(r.tool_use_id, { content: r.content, is_error: r.is_error })
-      }
+    const deadline = performance.now() + MOUNT_DEADLINE_MS
+    const look = () => {
+      const el = root.querySelector<HTMLElement>(`[data-turn="${target.uuid}"]`)
+      if (el) { undo = flashTurn(el); return }
+      if (performance.now() < deadline) frame = requestAnimationFrame(look)
     }
-    return map
-  }, [data])
+    frame = requestAnimationFrame(look)
+    return () => { cancelAnimationFrame(frame); undo?.() }
+  }, [target, root])
 
   if (error) {
     return (
@@ -80,36 +85,42 @@ export function AgentTranscript({ sessionId, agentId, scrollToMs }: Props) {
     )
   }
 
-  const turns = data.turns
-  const compactionByTurnIndex = new Map(data.compactions.map(c => [c.turn_index, c]))
-  let assistantTurnNum = 0
+  if (data.turns.length === 0) {
+    return <p className="py-6 text-center text-sm text-muted-foreground">Empty transcript.</p>
+  }
 
   return (
-    <div ref={listRef}>
-      {turns.slice(0, limit).map((turn, i) => {
-        const compactionBefore = compactionByTurnIndex.get(i)
-        if (turn.type === 'user') {
-          return (
-            <div key={turn.uuid || i} data-turn={turn.uuid}>
-              <UserTurnCard turn={turn} turnNumber={i + 1} compactionBefore={compactionBefore} toolResults={toolResults} />
-            </div>
-          )
+    <div ref={setRoot}>
+      <ReplaySearch
+        placement="sticky"
+        open={search.open}
+        onOpenChange={search.onOpenChange}
+        query={search.query}
+        onQueryChange={search.onQueryChange}
+        caseSensitive={search.caseSensitive}
+        onCaseSensitiveChange={search.onCaseSensitiveChange}
+        exact={search.exact}
+        onExactChange={search.onExactChange}
+        hits={search.hits}
+        current={search.position}
+        onStep={search.onStep}
+      />
+      <PanelTurnList
+        scroller={scroller}
+        turns={data.turns}
+        toolResults={toolResults}
+        compactions={data.compactions}
+        hitUuids={search.hitUuids}
+        current={search.current}
+        focus={
+          search.current
+            ? { index: search.current.index, token: search.current.index }
+            : target
+              ? { index: target.index, token: target.index }
+              : null
         }
-        assistantTurnNum++
-        return (
-          <div key={turn.uuid || i} data-turn={turn.uuid}>
-            <AssistantTurnCard turn={turn} turnNumber={assistantTurnNum} compactionBefore={compactionBefore} toolResults={toolResults} />
-          </div>
-        )
-      })}
-      {turns.length > limit && (
-        <div className="py-3 text-center">
-          <Button variant="outline" size="sm" onClick={() => setLimit(n => n + PAGE)}>
-            Show {Math.min(PAGE, turns.length - limit)} more turns · {turns.length - limit} left
-          </Button>
-        </div>
-      )}
-      {turns.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">Empty transcript.</p>}
+        onRenderedChange={search.onRenderedChange}
+      />
     </div>
   )
 }

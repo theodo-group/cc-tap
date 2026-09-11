@@ -2,12 +2,10 @@
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-/** Turns rendered at once in the Replay; more are appended as the reader scrolls */
-const TURN_PAGE = 100
 import useSWR from 'swr'
 import { TopBar } from '@/components/layout/top-bar'
 import { SessionSidebar } from '@/components/sessions/replay/session-sidebar'
-import { UserTurnCard, AssistantTurnCard } from '@/components/sessions/replay/turn-cards'
+import { TurnList } from '@/components/sessions/replay/turn-list'
 import { SessionBadges } from '@/components/sessions/session-badges'
 import { formatCost, formatTokens, formatDuration, projectDisplayName } from '@/lib/decode'
 import type { AgentRun, AgentTimeline, ReplayData, SessionWithFacet } from '@/types/claude'
@@ -23,7 +21,10 @@ import { ContextTab } from '@/components/sessions/context/context-tab'
 import { TimeWindowBar } from '@/components/sessions/time-window-bar'
 import { inWindow, intersectsWindow, windowFromSearch, windowToSearch, type TimeWindow } from '@/lib/time-window'
 import { turnAtTime, flashTurn } from '@/lib/turn-at-time'
-import { AlertTriangle, MessageSquare, Coins, DollarSign, Clock, Zap, Radio, Bot, Undo2, Loader2, Gauge } from 'lucide-react'
+import { ReplaySearch } from '@/components/sessions/replay/replay-search'
+import { useReplaySearch } from '@/components/sessions/replay/use-replay-search'
+import { REPLAY_HIGHLIGHTS } from '@/lib/replay-highlight'
+import { AlertTriangle, MessageSquare, Coins, DollarSign, Clock, Zap, Radio, Bot, Loader2, Gauge } from 'lucide-react'
 
 const fetcher = (url: string) =>
   fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
@@ -86,18 +87,25 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
   const onSelectAgent = useCallback((a: AgentRun, atMs?: number) => { setSelectedAt(atMs); setSelectedAgent(a) }, [])
   const onOpenOrchestratorAt = useCallback((atMs: number) => setOrchestratorAt(atMs), [])
   const agentsById = useMemo(() => new Map((timeline?.agents ?? []).map(a => [a.id, a])), [timeline])
-  // ─── Replay pagination: a 2000-turn session would otherwise block the main thread for seconds
-  const [visibleTurns, setVisibleTurns] = useState(TURN_PAGE)
-  const sentinelRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const el = sentinelRef.current
-    if (!el) return
-    const io = new IntersectionObserver(entries => {
-      if (entries.some(e => e.isIntersecting)) setVisibleTurns(n => n + TURN_PAGE)
-    }, { rootMargin: '600px 0px' })
-    io.observe(el)
-    return () => io.disconnect()
-  }, [view])
+  // ─── The turn list is virtualised, so a jump costs the same wherever it lands.
+  /** A jump asked for by hand; its token makes the same turn ask again */
+  const [jump, setJump] = useState<{ index: number; token: number } | null>(null)
+
+  // ─── Search over the whole conversation, held by one hook for the Replay
+  //     and for the drawers alike
+  const toolResults = useMemo(() => {
+    const map = new Map<string, { content: string; is_error: boolean }>()
+    for (const t of replayData?.turns ?? []) {
+      for (const r of t.tool_results ?? []) map.set(r.tool_use_id, { content: r.content, is_error: r.is_error })
+    }
+    return map
+  }, [replayData])
+  const [listRoot, setListRoot] = useState<HTMLDivElement | null>(null)
+  const search = useReplaySearch(replayData?.turns, toolResults, {
+    names: REPLAY_HIGHLIGHTS,
+    root: listRoot,
+    enabled: tab === 'replay',
+  })
 
   const jumpRef = useRef<string | null>(null)
   useEffect(() => {
@@ -105,19 +113,24 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
     const uuid = jumpRef.current
     jumpRef.current = null
     let undo: (() => void) | undefined
-    // Wait for the details sheet to close and the tab panel to lay out
-    const t1 = setTimeout(() => {
+    let frame = 0
+    // The sheet has to close, the panel to lay out and the virtual list to
+    // mount the turn, so the flash waits for the card instead of a fixed delay
+    const deadline = performance.now() + 2000
+    const look = () => {
       const el = document.getElementById(`turn-${uuid}`)
-      if (el) undo = flashTurn(el)
-    }, 400)
-    return () => { clearTimeout(t1); undo?.() }
+      if (el) { undo = flashTurn(el); return }
+      if (performance.now() < deadline) frame = requestAnimationFrame(look)
+    }
+    frame = requestAnimationFrame(look)
+    return () => { cancelAnimationFrame(frame); undo?.() }
   }, [tab])
   const jumpToTurn = (uuid: string) => {
     jumpRef.current = uuid
-    // Make sure the target turn is rendered before the scroll runs. The list shows the
-    // whole session, window or not, so the index is taken on the full turn list.
+    // The list shows the whole session, window or not, so the index is taken on
+    // the full turn list; the virtualiser mounts that turn and nothing before it.
     const idx = replayData?.turns.findIndex(t => t.uuid === uuid) ?? -1
-    if (idx >= 0) setVisibleTurns(n => Math.max(n, idx + 20))
+    if (idx >= 0) setJump(j => ({ index: idx, token: (j?.token ?? 0) + 1 }))
     setTab('replay')
   }
   /** Open the Replay at the orchestrator turn that was in progress at `timeMs` */
@@ -178,21 +191,6 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
   // The turn list always shows the whole session; turns outside the window are dimmed.
   // A jump from the Agents tab can then land on any turn while the window stays selected.
   const allTurns = replayData.turns
-
-  // Build tool results map: tool_use_id -> result (from user turns)
-  const toolResults = new Map<string, { content: string; is_error: boolean }>()
-  for (const t of allTurns) {
-    if (t.type === 'user' && t.tool_results) {
-      for (const r of t.tool_results) {
-        toolResults.set(r.tool_use_id, { content: r.content, is_error: r.is_error })
-      }
-    }
-  }
-
-  // Build compaction map: index of turn before which a compaction occurred
-  const compactionByTurnIndex = new Map(replayData.compactions.map(c => [c.turn_index, c]))
-
-  let assistantTurnNum = 0
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -345,58 +343,31 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
               {win && replay.turns.length === 0 && (
                 <p className="py-3 text-center text-sm text-muted-foreground">No turns in the selected window. The whole session is shown dimmed.</p>
               )}
-              {allTurns.slice(0, visibleTurns).map((turn, i) => {
-                const compactionBefore = compactionByTurnIndex.get(i)
-                const startsDiscarded = turn.discarded && !allTurns[i - 1]?.discarded
-                const discardedBand = startsDiscarded ? (
-                  <div className="my-3 flex items-center gap-2 rounded-lg border border-purple-400/40 bg-purple-500/10 px-4 py-2 text-sm text-purple-300">
-                    <Undo2 className="h-4 w-4" />
-                    <span className="font-semibold">REWIND</span>
-                    <span className="text-purple-300/80">the turns below were discarded. Their tokens still count.</span>
-                  </div>
-                ) : null
-                const outsideWindow = !inWindow(turn.timestamp, win)
-                const wrapClass = [turn.discarded && 'opacity-50 saturate-50', outsideWindow && 'opacity-40'].filter(Boolean).join(' ') || undefined
-
-                if (turn.type === 'user') {
-                  return (
-                    <div key={turn.uuid || i} id={`turn-${turn.uuid}`} className={wrapClass}>
-                      {discardedBand}
-                      <UserTurnCard
-                        turn={turn}
-                        turnNumber={i + 1}
-                        compactionBefore={compactionBefore}
-                        toolResults={toolResults}
-                      />
-                    </div>
-                  )
-                }
-
-                assistantTurnNum++
-                return (
-                  <div key={turn.uuid || i} id={`turn-${turn.uuid}`} className={wrapClass}>
-                    {discardedBand}
-                    <AssistantTurnCard
-                      turn={turn}
-                      turnNumber={assistantTurnNum}
-                      compactionBefore={compactionBefore}
-                      toolResults={toolResults}
-                    />
-                  </div>
-                )
-              })}
-              {allTurns.length > visibleTurns && (
-                <div ref={sentinelRef} className="flex items-center justify-center gap-3 py-6 text-sm text-muted-foreground">
-                  <span>{allTurns.length - visibleTurns} more turns</span>
-                  <button
-                    type="button"
-                    className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
-                    onClick={() => setVisibleTurns(allTurns.length)}
-                  >
-                    Show all
-                  </button>
-                </div>
-              )}
+              <ReplaySearch
+                open={search.open}
+                onOpenChange={search.onOpenChange}
+                query={search.query}
+                onQueryChange={search.onQueryChange}
+                caseSensitive={search.caseSensitive}
+                onCaseSensitiveChange={search.onCaseSensitiveChange}
+                exact={search.exact}
+                onExactChange={search.onExactChange}
+                hits={search.hits}
+                current={search.position}
+                onStep={search.onStep}
+              />
+              <div ref={setListRoot}>
+                <TurnList
+                  turns={allTurns}
+                  toolResults={toolResults}
+                  compactions={replayData.compactions}
+                  window={win}
+                  hitUuids={search.hitUuids}
+                  current={search.current}
+                  focus={jump ?? (search.current ? { index: search.current.index, token: search.current.index } : null)}
+                  onRenderedChange={search.onRenderedChange}
+                />
+              </div>
             </div>
 
             {/* Sidebar */}
