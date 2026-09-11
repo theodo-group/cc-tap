@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { ToolCallBadge } from './tool-call-badge'
 import { CompactionCard } from './compaction-card'
 import { AssistantMarkdown } from './assistant-markdown'
 import { UserToolResult } from './user-tool-result'
 import { formatCost, formatTokens, formatDurationMs } from '@/lib/decode'
 import type { ReplayTurn, CompactionEvent } from '@/types/claude'
+import type { TurnMatch } from '@/lib/replay-search'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -31,6 +32,9 @@ interface TurnCardProps {
   turnNumber: number
   compactionBefore?: CompactionEvent
   toolResults: Map<string, { content: string; is_error: boolean }>
+  /** where the search found its terms in this turn, given to the turn the
+   *  reader is on: what holds a hit opens itself so the highlight can be seen */
+  match?: TurnMatch
 }
 
 function TokenBreakdown({ turn }: { turn: ReplayTurn }) {
@@ -66,7 +70,7 @@ function TokenBreakdown({ turn }: { turn: ReplayTurn }) {
   )
 }
 
-export function UserTurnCard({ turn, compactionBefore }: TurnCardProps) {
+function UserTurnCardView({ turn, compactionBefore, match }: TurnCardProps) {
   return (
     <div>
       {compactionBefore && <CompactionCard event={compactionBefore} />}
@@ -91,7 +95,7 @@ export function UserTurnCard({ turn, compactionBefore }: TurnCardProps) {
         {turn.tool_results && turn.tool_results.length > 0 && (
           <div className="flex w-full max-w-[90%] flex-col gap-2">
             {turn.tool_results.map(r => (
-              <UserToolResult key={r.tool_use_id} content={r.content} isError={r.is_error} />
+              <UserToolResult key={r.tool_use_id} content={r.content} isError={r.is_error} matched={match?.results.has(r.tool_use_id)} />
             ))}
           </div>
         )}
@@ -100,9 +104,13 @@ export function UserTurnCard({ turn, compactionBefore }: TurnCardProps) {
   )
 }
 
-export function AssistantTurnCard({ turn, turnNumber, toolResults }: TurnCardProps) {
-  const [thinkingOpen, setThinkingOpen] = useState(false)
-  const [expanded, setExpanded] = useState(false)
+function AssistantTurnCardView({ turn, turnNumber, toolResults, match }: TurnCardProps) {
+  // null until the reader decides; a search hit inside opens the part meanwhile
+  const [thinkingOpen, setThinkingOpen] = useState<boolean | null>(null)
+  const [expanded, setExpanded] = useState<boolean | null>(null)
+  const inThinking = match?.thinking ?? false
+  const isThinkingOpen = thinkingOpen ?? inThinking
+  const isExpanded = expanded ?? (match?.text ?? false)
 
   const modelShort = turn.model?.includes('opus-4-7') ? 'Opus 4.7'
     : turn.model?.includes('opus-4-6') ? 'Opus 4.6'
@@ -148,19 +156,20 @@ export function AssistantTurnCard({ turn, turnNumber, toolResults }: TurnCardPro
             variant="ghost"
             size="sm"
             className="h-auto gap-1.5 px-2 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-500/10 hover:text-indigo-900 dark:text-indigo-400/90 dark:hover:text-indigo-300"
-            onClick={() => setThinkingOpen(o => !o)}
+            onClick={() => setThinkingOpen(!isThinkingOpen)}
           >
             <Brain className="h-3.5 w-3.5 shrink-0" />
             Extended thinking
             <ChevronDown
-              className={cn('h-3.5 w-3.5 shrink-0 transition-transform duration-200', thinkingOpen && 'rotate-180')}
+              className={cn('h-3.5 w-3.5 shrink-0 transition-transform duration-200', isThinkingOpen && 'rotate-180')}
             />
           </Button>
-          {thinkingOpen && turn.thinking_text && (
+          {isThinkingOpen && turn.thinking_text && (
             <div className="mt-1 bg-indigo-50 border border-indigo-200/80 rounded-xl px-4 py-3 dark:bg-indigo-950/20 dark:border-indigo-800/25">
               <pre className="text-xs text-indigo-950/90 whitespace-pre-wrap max-h-56 overflow-auto leading-relaxed dark:text-indigo-200/50">
-                {turn.thinking_text.slice(0, 3000)}
-                {turn.thinking_text.length > 3000 && (
+                {/* A hit can sit past the cut, so a searched turn shows the whole thinking */}
+                {inThinking ? turn.thinking_text : turn.thinking_text.slice(0, 3000)}
+                {!inThinking && turn.thinking_text.length > 3000 && (
                   <span className="text-indigo-400/40"> …[{(turn.thinking_text.length - 3000).toLocaleString()} more chars]</span>
                 )}
               </pre>
@@ -177,6 +186,8 @@ export function AssistantTurnCard({ turn, turnNumber, toolResults }: TurnCardPro
               key={tc.id}
               tool={tc}
               result={toolResults.get(tc.id)}
+              inInput={match?.inputs.has(tc.id)}
+              inResult={match?.results.has(tc.id)}
             />
           ))}
         </div>
@@ -189,11 +200,11 @@ export function AssistantTurnCard({ turn, turnNumber, toolResults }: TurnCardPro
             <div
               className={cn(
                 'relative',
-                needsExpandToggle && !expanded && 'max-h-112 overflow-hidden'
+                needsExpandToggle && !isExpanded && 'max-h-112 overflow-hidden'
               )}
             >
               <AssistantMarkdown content={textToShow} />
-              {needsExpandToggle && !expanded && (
+              {needsExpandToggle && !isExpanded && (
                 <div
                   className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-linear-to-t from-card to-transparent"
                   aria-hidden
@@ -206,9 +217,9 @@ export function AssistantTurnCard({ turn, turnNumber, toolResults }: TurnCardPro
                 variant="ghost"
                 size="sm"
                 className="mt-2 h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => setExpanded(e => !e)}
+                onClick={() => setExpanded(!isExpanded)}
               >
-                {expanded ? (
+                {isExpanded ? (
                   <>
                     <ChevronUp className="h-3 w-3" /> Show less
                   </>
@@ -232,3 +243,9 @@ export function AssistantTurnCard({ turn, turnNumber, toolResults }: TurnCardPro
     </div>
   )
 }
+
+/* A keystroke in the find bar re-renders the list, and a long session holds
+   hundreds of mounted cards. Only the turn the arrows are on takes a new
+   `match`, so every other card can keep the tree it already has. */
+export const UserTurnCard = memo(UserTurnCardView)
+export const AssistantTurnCard = memo(AssistantTurnCardView)
