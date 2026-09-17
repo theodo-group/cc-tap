@@ -1,0 +1,54 @@
+app/overview-client.tsx
+  s_b3024eb26d009a::t_673af936893b34 14
+  s_b3024eb26d009a::t_e9e86bd431c9a5 96
+lib/pricing.ts
+  s_78f633176d871f::t_af3cadcc9a2dea 12,14-15,18-19,28-29
+  s_b3024eb26d009a::t_e9e86bd431c9a5 93-96,103,126-130,133-134,140,143
+components/sessions/replay/turn-cards.tsx
+  s_b3024eb26d009a::t_673af936893b34 107-111,115
+lib/insights.ts
+  s_b3024eb26d009a::t_e9e86bd431c9a5 85-86
+lib/__tests__/pricing.test.ts
+  s_b3024eb26d009a::t_60d91bc1458fd0 86
+  s_b3024eb26d009a::t_673af936893b34 47-51
+  s_b3024eb26d009a::t_eff5c7674e176d 13
+  s_78f633176d871f::t_552a78af7e1ef8 32-42
+components/overview/model-breakdown-donut.tsx
+  s_b3024eb26d009a::t_673af936893b34 32-35,41
+docs/CHANGELOG.md
+  s_b3024eb26d009a::t_673af936893b34 33-35
+components/costs/model-token-table.tsx
+  s_b3024eb26d009a::t_673af936893b34 5-8,12
+lib/__tests__/insights.test.ts
+  s_b3024eb26d009a::t_673af936893b34 87-88
+lib/team-reader.ts
+  s_b3024eb26d009a::t_673af936893b34 13
+  s_b3024eb26d009a::t_e9e86bd431c9a5 68
+components/costs/cost-over-time-chart.tsx
+  s_b3024eb26d009a::t_f608d8301c7390 21-23,25-26
+  s_b3024eb26d009a::t_673af936893b34 9-12,16,32-35,39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "bd7cec70553fe73cbfef1f68ec932416a4daf2b7",
+  "prompts": {},
+  "sessions": {
+    "s_78f633176d871f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f62a3805-5793-4b1c-a8d2-282dc07e47e7",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    },
+    "s_b3024eb26d009a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b5d5938c-852c-4411-8942-6235eff08638",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
