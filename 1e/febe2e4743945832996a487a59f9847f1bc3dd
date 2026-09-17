@@ -1,0 +1,38 @@
+lib/__tests__/claude-reader.test.ts
+  s_8f3aacfea40d45::t_65512ef3295f4a 13-33,78-86,103,107-108,135-146,149,152-171
+  s_8f3aacfea40d45::t_d0743fb87247c8 147-148,150-151
+  s_8f3aacfea40d45::t_b4d2b0488d34db 172
+types/claude.ts
+  s_8f3aacfea40d45::t_a2198209d6d16e 78,80-83
+lib/claude-reader.ts
+  s_8f3aacfea40d45::t_0de4aa359181ce 14-15,277-431,437-438,475,479-480,492-493,495-497
+app/sessions/[id]/page.tsx
+  s_8f3aacfea40d45::t_521bcbafa22c4e 80-86,205,262,266-272
+  s_8f3aacfea40d45::t_7f1ae789473ca2 173-177,250-252
+app/api/projects/route.ts
+  s_8f3aacfea40d45::t_6753dd91a7b614 3,68-70
+app/api/projects/[slug]/route.ts
+  s_8f3aacfea40d45::t_6753dd91a7b614 4,56
+app/overview-client.tsx
+  s_8f3aacfea40d45::t_521bcbafa22c4e 14
+  s_8f3aacfea40d45::t_6753dd91a7b614 85-86,88
+components/sessions/session-table.tsx
+  s_8f3aacfea40d45::t_521bcbafa22c4e 7,233,302-322
+  s_8f3aacfea40d45::t_eecb863f4f869a 323-324
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1efebe2e4743945832996a487a59f9847f1bc3dd",
+  "prompts": {},
+  "sessions": {
+    "s_8f3aacfea40d45": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a154e4ac-a08e-4103-ba31-b638e3eedc3f",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
