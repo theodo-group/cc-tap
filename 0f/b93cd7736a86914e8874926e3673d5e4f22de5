@@ -1,0 +1,52 @@
+lib/__tests__/session-ledger.test.ts
+  s_89f47365505541::t_05958534295dff 1-136
+lib/session-ledger.ts
+  s_89f47365505541::t_3677f40d094b96 1,133
+  s_89f47365505541::t_d4e03841c13db9 2-132,134-244
+app/api/sessions/route.ts
+  s_89f47365505541::t_3677f40d094b96 1-2,4-6,10-16,24-51,53-58
+components/sessions/range-filter.tsx
+  s_89f47365505541::t_2166c15542ff1e 1-9,11,13-38,45-79,85-100,117-120,123-125,127-138,140-143,145-155
+  s_89f47365505541::t_d7b7c865a2de61 39-44,80-84,101-116,126,139
+  s_89f47365505541::t_7425f6940df4d1 10,12,121-122
+  s_89f47365505541::t_27bdaa88eafed0 144
+app/overview-client.tsx
+  s_89f47365505541::t_22474fdd2012ea 5,18,47,365
+types/claude.ts
+  s_89f47365505541::t_3677f40d094b96 104-126,136-163
+docs/RANGE-FILTER-PLAN.md
+  s_89f47365505541::t_9a92c96a31acde 3-4
+  s_89f47365505541::t_27bdaa88eafed0 135
+  s_89f47365505541::t_d59ecf24eb583a 1-2,5-134,136-179
+lib/claude-reader.ts
+  s_89f47365505541::t_03795eb263e5e3 16,47-56,65-67,148-149,185,200-206,208-211,239,248-255,307-308,325-328,330-332,359,361,370,373-374,381-396,402,413,492,494,496-497,499-500,502,523
+app/api/usage-windows/route.ts
+  s_89f47365505541::t_3332851f83a95a 7
+  s_89f47365505541::t_3677f40d094b96 1-6,8-33
+components/ui/date-range-picker.tsx
+  s_89f47365505541::t_22474fdd2012ea 1-53
+app/sessions/page.tsx
+  s_89f47365505541::t_014661d275c7e4 3-4,8-10,15-42,48,50-51,55,62,67-73,75
+  s_89f47365505541::t_0cd5c1c2d741c5 74
+components/ui/date-time-picker.tsx
+  s_89f47365505541::t_7425f6940df4d1 1-31,36-83
+  s_89f47365505541::t_2be652c3ddd0ea 32-35
+components/sessions/session-table.tsx
+  s_89f47365505541::t_014661d275c7e4 8-9,13,18-83,106,135-141,143-151,153-155,158,241-250,266,273,288-305,322,325,328-331,334,351,405-436,438-443,447,449-450
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0fb93cd7736a86914e8874926e3673d5e4f22de5",
+  "prompts": {},
+  "sessions": {
+    "s_89f47365505541": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3715f3f7-c827-49dd-93e3-13f9c15a3258",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
