@@ -1,0 +1,35 @@
+lib/agent-timeline.ts
+  s_1a9bf8d8fab557::t_bb5a47657934b1 647-649
+lib/insights.ts
+  s_1a9bf8d8fab557::t_55db634a0feea2 2
+  s_1a9bf8d8fab557::t_bb5a47657934b1 49
+lib/pricing.ts
+  s_1a9bf8d8fab557::t_bb5a47657934b1 112-115
+components/sessions/session-table.tsx
+  s_1a9bf8d8fab557::t_3b9a1e48667751 260
+  s_1a9bf8d8fab557::t_55db634a0feea2 174-175,313-322
+lib/__tests__/claude-reader.test.ts
+  s_1a9bf8d8fab557::t_3b9a1e48667751 15-16,39-43,97-103,121,181-196,198-219,222-233
+  s_1a9bf8d8fab557::t_24534a81493539 136
+  s_1a9bf8d8fab557::t_86de0598e326aa 220-221
+app/api/costs/route.ts
+  s_1a9bf8d8fab557::t_55db634a0feea2 3,50
+lib/claude-reader.ts
+  s_1a9bf8d8fab557::t_bb5a47657934b1 15,316-318,348-355,382-389,395,397,401,410-413,415-427,435-438,441,465-480,519-522,527-538,547,560
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5593be4e097d0d3708e1d69b224bd02bafa4d590",
+  "prompts": {},
+  "sessions": {
+    "s_1a9bf8d8fab557": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "58382a94-3c67-4f66-85d4-07e7d540d65b",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
