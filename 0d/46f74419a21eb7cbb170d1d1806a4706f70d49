@@ -1,0 +1,25 @@
+lib/jsonl.ts
+  s_d53a6d015a2b9c::t_027824e71009a4 4
+lib/transcript-scan.ts
+  s_d53a6d015a2b9c::t_027824e71009a4 53,83
+lib/claude-reader.ts
+  s_d53a6d015a2b9c::t_027824e71009a4 269,306,311,322,327,340,447
+lib/pricing.ts
+  s_d53a6d015a2b9c::t_027824e71009a4 111,183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0d46f74419a21eb7cbb170d1d1806a4706f70d49",
+  "prompts": {},
+  "sessions": {
+    "s_d53a6d015a2b9c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a77e6b59-0d90-4f01-81a3-875c52616164",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
