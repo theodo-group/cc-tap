@@ -1,0 +1,21 @@
+components/ui/date-range-picker.tsx
+  s_89f47365505541::t_22474fdd2012ea 1-53
+app/overview-client.tsx
+  s_89f47365505541::t_22474fdd2012ea 5,18,47,365
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "05647914b69b1cd7bf28ee66e3331f315b3f06c8",
+  "prompts": {},
+  "sessions": {
+    "s_89f47365505541": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3715f3f7-c827-49dd-93e3-13f9c15a3258",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
