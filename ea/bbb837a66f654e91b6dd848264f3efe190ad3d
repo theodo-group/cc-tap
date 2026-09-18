@@ -1,0 +1,23 @@
+lib/__tests__/agent-timeline.test.ts
+  s_061fbcc9f3d5a7::t_4bf4b974120c1b 5-6
+lib/transcript-scan.ts
+  s_061fbcc9f3d5a7::t_4bf4b974120c1b 1-243
+lib/agent-timeline.ts
+  s_061fbcc9f3d5a7::t_4bf4b974120c1b 3,5-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "eabbb837a66f654e91b6dd848264f3efe190ad3d",
+  "prompts": {},
+  "sessions": {
+    "s_061fbcc9f3d5a7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "efc74cce-eb35-4809-b0f2-84b3705ab003",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
