@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { mkdtemp, mkdir, writeFile, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import path from 'path'
-import { parseAgentTimeline, isHumanPrompt, parseNotifications, resolveOutcome } from '@/lib/agent-timeline'
+import { parseAgentTimeline, resolveOutcome } from '@/lib/agent-timeline'
+import { isHumanPrompt, parseNotifications } from '@/lib/transcript-scan'
 
 const SESSION = 'sess-1'
 let dir: string
