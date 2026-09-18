@@ -1,0 +1,46 @@
+app/api/projects/route.ts
+  s_061fbcc9f3d5a7::t_0c0acedb207922 3,68-70
+app/api/costs/route.ts
+  s_061fbcc9f3d5a7::t_0c0acedb207922 3,50
+app/api/sessions/[id]/route.ts
+  s_061fbcc9f3d5a7::t_0c0acedb207922 3
+lib/team-reader.ts
+  s_061fbcc9f3d5a7::t_0c0acedb207922 13
+app/overview-client.tsx
+  s_061fbcc9f3d5a7::t_0c0acedb207922 14,85-86,88,98
+app/api/wrapped/route.ts
+  s_061fbcc9f3d5a7::t_0c0acedb207922 3
+lib/insights.ts
+  s_061fbcc9f3d5a7::t_0c0acedb207922 2
+lib/pricing.ts
+  s_061fbcc9f3d5a7::t_0c0acedb207922 1,111-113,130,177-194
+  s_061fbcc9f3d5a7::t_73602735db40e2 195
+app/api/sessions/route.ts
+  s_061fbcc9f3d5a7::t_0c0acedb207922 3
+lib/__tests__/insights.test.ts
+  s_061fbcc9f3d5a7::t_0c0acedb207922 2-3
+app/api/projects/[slug]/route.ts
+  s_061fbcc9f3d5a7::t_0c0acedb207922 4,56
+app/api/digest/route.ts
+  s_061fbcc9f3d5a7::t_0c0acedb207922 4-5
+app/api/insights/route.ts
+  s_061fbcc9f3d5a7::t_0c0acedb207922 3-4
+app/api/projects/trends/route.ts
+  s_061fbcc9f3d5a7::t_0c0acedb207922 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f0c9c2af24a6543faa3dc690f164d9f178ec37ca",
+  "prompts": {},
+  "sessions": {
+    "s_061fbcc9f3d5a7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "efc74cce-eb35-4809-b0f2-84b3705ab003",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
