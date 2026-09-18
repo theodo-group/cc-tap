@@ -1,0 +1,21 @@
+app/sessions/[id]/page.tsx
+  s_061fbcc9f3d5a7::t_6bc5c367a4e12b 14,81-87,174-178,206,251-253,263,267-273
+components/sessions/session-table.tsx
+  s_061fbcc9f3d5a7::t_107421ff331ac1 7,9,175-176,235,261,305-325
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "686668d76ef6e27274a8b39d4df34907cc82b289",
+  "prompts": {},
+  "sessions": {
+    "s_061fbcc9f3d5a7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "efc74cce-eb35-4809-b0f2-84b3705ab003",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
