@@ -1,0 +1,38 @@
+lib/insights.ts
+  s_d53a6d015a2b9c::t_97196c1cbc2322 2,49
+app/overview-client.tsx
+  s_d53a6d015a2b9c::t_97196c1cbc2322 98
+  s_d53a6d015a2b9c::t_18353c21bbec1c 14
+lib/pricing.ts
+  s_d53a6d015a2b9c::t_97196c1cbc2322 111-115,117,133
+lib/claude-reader.ts
+  s_d53a6d015a2b9c::t_18353c21bbec1c 15,315-329,344,346-362
+  s_d53a6d015a2b9c::t_97196c1cbc2322 16,440,449
+package.json
+  s_d53a6d015a2b9c::t_2d1e640bd00134 73-74
+lib/__tests__/claude-reader.test.ts
+  s_d53a6d015a2b9c::t_27f7a0413d1b56 5,187,189-190
+lib/team-reader.ts
+  s_d53a6d015a2b9c::t_97196c1cbc2322 68
+  s_d53a6d015a2b9c::t_18353c21bbec1c 13
+app/api/costs/route.ts
+  s_d53a6d015a2b9c::t_97196c1cbc2322 3,50
+package-lock.json
+  s_d53a6d015a2b9c::t_a89e91baee52b2 35-36,14494-14496
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5cc7de1970a12a7eb0bee72fcf8519a2f451ea36",
+  "prompts": {},
+  "sessions": {
+    "s_d53a6d015a2b9c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a77e6b59-0d90-4f01-81a3-875c52616164",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
