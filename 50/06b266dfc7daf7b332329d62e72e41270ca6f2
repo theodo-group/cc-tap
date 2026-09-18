@@ -1,0 +1,21 @@
+lib/time-window.ts
+  s_f8a9bc8089c349::t_c8c348dba76a1e 26-32,35-36
+lib/__tests__/time-window.test.ts
+  s_f8a9bc8089c349::t_462af48c2b0b73 1-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "5006b266dfc7daf7b332329d62e72e41270ca6f2",
+  "prompts": {},
+  "sessions": {
+    "s_f8a9bc8089c349": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e94dea7-6635-44e4-8bba-bf251e0e4d56",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
