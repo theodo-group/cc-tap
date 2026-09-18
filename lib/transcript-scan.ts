@@ -1,4 +1,5 @@
 import { stat } from 'fs/promises'
+import { z } from 'zod'
 import type { PromptTick, TimeSegment, TurnUsage } from '@/types/claude'
 import { readJSONLLines } from '@/lib/jsonl'
 import { resultText } from '@/lib/tool-search'
@@ -48,6 +49,9 @@ export interface TranscriptScan {
   last?: string
   assistantCount: number
   usage: TurnUsage
+  usageByModel: Record<string, TurnUsage>
+  /** Usage of messages that carry no model; the caller attributes it */
+  unattributedUsage: TurnUsage
   model?: string
   /** Agent tool_use id -> launch info */
   launches: Map<string, LaunchInfo>
@@ -75,6 +79,17 @@ function addUsage(acc: TurnUsage, u: Partial<TurnUsage> | undefined) {
   acc.cache_creation_input_tokens += u.cache_creation_input_tokens ?? 0
   acc.cache_read_input_tokens     += u.cache_read_input_tokens ?? 0
 }
+
+/** The part of an assistant message that prices it */
+const AssistantPricing = z.object({
+  model: z.string().optional(),
+  usage: z.object({
+    input_tokens: z.number().default(0),
+    output_tokens: z.number().default(0),
+    cache_read_input_tokens: z.number().default(0),
+    cache_creation_input_tokens: z.number().default(0),
+  }).optional(),
+})
 
 const NOTIFICATION_RE = /<task-notification>[\s\S]*?<task-id>([^<]+)<\/task-id>[\s\S]*?<status>([^<]+)<\/status>/g
 
@@ -130,6 +145,8 @@ export function scanTranscript(lines: AnyLine[]): TranscriptScan {
   const scan: TranscriptScan = {
     assistantCount: 0,
     usage: emptyUsage(),
+    usageByModel: {},
+    unattributedUsage: emptyUsage(),
     launches: new Map(),
     nudges: new Map(),
     notifications: [],
@@ -177,8 +194,16 @@ export function scanTranscript(lines: AnyLine[]): TranscriptScan {
     if (l.type === 'assistant') {
       scan.assistantCount++
       const msg = l.message ?? {}
-      addUsage(scan.usage, msg.usage)
-      if (!scan.model && msg.model) scan.model = msg.model
+      const priced = AssistantPricing.safeParse(msg)
+      if (priced.success) {
+        const { model, usage } = priced.data
+        if (usage) {
+          addUsage(scan.usage, usage)
+          if (model) addUsage(scan.usageByModel[model] ??= emptyUsage(), usage)
+          else addUsage(scan.unattributedUsage, usage)
+        }
+        if (!scan.model && model) scan.model = model
+      }
       const content = Array.isArray(msg.content) ? msg.content : []
       for (const c of content) {
         if (c.type !== 'tool_use') continue
@@ -241,3 +266,9 @@ export async function scanFile(filePath: string): Promise<{ scan: TranscriptScan
   return { scan, mtime: entry.mtime }
 }
 
+/** Drop cached scans whose file is no longer wanted (deleted session, pruned agent) */
+export function pruneScanCache(keep: (filePath: string) => boolean): void {
+  for (const key of scanCache.keys()) {
+    if (!keep(key)) scanCache.delete(key)
+  }
+}

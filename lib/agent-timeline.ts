@@ -412,7 +412,7 @@ export async function parseAgentTimeline(
       duration_ms: Math.max(0, new Date(durationEnd).getTime() - new Date(start).getTime()),
       turns: r.scan.assistantCount,
       usage: r.scan.usage,
-      estimated_cost: estimateCostFromUsage(r.scan.model ?? model ?? '', r.scan.usage),
+      estimated_cost: estimateCostFromUsage(r.scan.model ?? model ?? main.model ?? '', r.scan.usage),
       outcome,
       nudges: (nudges.get(r.id) ?? []).sort(),
       launch_tool_use_id: r.meta.toolUseId,

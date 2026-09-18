@@ -82,8 +82,8 @@ function filterActivityByRange(dailyActivity: DailyActivity[], from: Date, to: D
   return dailyActivity.filter(d => inRange(d.date, from, to))
 }
 
-/** The API already prices each session; reuse it rather than re-deriving
- *  so every page shows the same figure. */
+/** The API already prices each session (orchestrator + sub-agents); reuse it
+ *  rather than re-deriving so every page shows the same figure. */
 function sessionCost(session: SessionWithFacet): number {
   return session.estimated_cost ?? 0
 }

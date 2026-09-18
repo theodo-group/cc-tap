@@ -4,6 +4,7 @@ import { createInterface } from 'readline'
 import path from 'path'
 import os from 'os'
 import type {
+  TurnUsage,
   StatsCache,
   SessionMeta,
   HistoryEntry,
@@ -11,7 +12,10 @@ import type {
   LiveSession,
 } from '@/types/claude'
 import { slugToPath } from '@/lib/decode'
+import { listSubagentFiles, readAgentMeta, type SubagentFile } from '@/lib/subagent-files'
+import { pruneScanCache, scanFile } from '@/lib/transcript-scan'
 import { mapPool, readJSONLLines } from '@/lib/jsonl'
+import { FALLBACK_MODEL } from '@/lib/pricing'
 
 export { mapPool, readJSONLLines }
 
@@ -23,6 +27,7 @@ function stripXmlTags(text: string): string {
     .replace(/<\/?[a-zA-Z][\w-]*\b[^>]*\/?>/g, '')
     .trim()
 }
+
 
 // Reading every JSONL on every request is the dominant cost at scale (thousands
 // of files × hundreds of KB each). Cache parsed sessions by file path, keyed on
@@ -260,12 +265,156 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Pa
   }
 }
 
+// ─── Sub-agent usage ─────────────────────────────────────────────────────────
+// Transcripts under <dir>/<session>/subagents/ are folded into the session's counters.
+
+function emptyModelUsage(): ModelUsage {
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    costUSD: 0,
+    webSearchRequests: 0,
+  }
+}
+
+function addModelUsage(target: Record<string, ModelUsage>, model: string, usage: ModelUsage) {
+  const existing = target[model] ?? emptyModelUsage()
+  existing.inputTokens += usage.inputTokens
+  existing.outputTokens += usage.outputTokens
+  existing.cacheReadInputTokens += usage.cacheReadInputTokens
+  existing.cacheCreationInputTokens += usage.cacheCreationInputTokens
+  target[model] = existing
+}
+
+function toModelUsage(u: TurnUsage): ModelUsage {
+  return {
+    inputTokens: u.input_tokens,
+    outputTokens: u.output_tokens,
+    cacheReadInputTokens: u.cache_read_input_tokens,
+    cacheCreationInputTokens: u.cache_creation_input_tokens,
+    costUSD: 0,
+    webSearchRequests: 0,
+  }
+}
+
+function hasTokens(u: TurnUsage): boolean {
+  return u.input_tokens + u.output_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens > 0
+}
+
+/** The .meta.json sidecar names the model an agent was started with; read uncached since it can land after the transcript's last write */
+async function resolveUnknownModel(file: SubagentFile, fallbackModel: string): Promise<string> {
+  return (await readAgentMeta(file.meta)).model ?? fallbackModel
+}
+
+/** Model carrying most of the orchestrator's tokens; a fork inherits its parent's */
+function dominantModel(modelUsage: Record<string, ModelUsage>): string | undefined {
+  let best: string | undefined
+  let bestTokens = -1
+  for (const [model, u] of Object.entries(modelUsage)) {
+    const tokens = u.inputTokens + u.outputTokens + u.cacheReadInputTokens + u.cacheCreationInputTokens
+    if (tokens > bestTokens) { best = model; bestTokens = tokens }
+  }
+  return best
+}
+
+/** An orchestrator quiet for this long is assumed to have no agent running, so its fold is served from foldedCache */
+const QUIET_SESSION_MS = 5 * 60 * 1000
+
+const foldedCache = new Map<string, { mtimeMs: number; promise: Promise<ParsedSession> }>()
+
+/** Fold every sub-agent transcript of a session into its counters; only called for sessions with a `<session>/` folder */
+async function withAgentUsage(session: ParsedSession, jsonlPath: string): Promise<ParsedSession> {
+  const files = await listSubagentFiles(jsonlPath, session.session_id)
+  if (files.length === 0) return session
+
+  const scans = await mapPool(files, 4, async (f) => {
+    try {
+      return (await scanFile(f.jsonl)).scan
+    } catch {
+      return null
+    }
+  })
+
+  // A model-less orchestrator only has top-level counters; bucket them like sessionCost() does
+  const modelUsage: Record<string, ModelUsage> = {}
+  if (session.model_usage && Object.keys(session.model_usage).length > 0) {
+    for (const [model, u] of Object.entries(session.model_usage)) addModelUsage(modelUsage, model, u)
+  } else {
+    addModelUsage(modelUsage, FALLBACK_MODEL, {
+      inputTokens: session.input_tokens,
+      outputTokens: session.output_tokens,
+      cacheReadInputTokens: session.cache_read_input_tokens ?? 0,
+      cacheCreationInputTokens: session.cache_creation_input_tokens ?? 0,
+      costUSD: 0,
+      webSearchRequests: 0,
+    })
+  }
+  const fallbackModel = dominantModel(modelUsage) ?? FALLBACK_MODEL
+
+  const agentModelUsage: Record<string, ModelUsage> = {}
+  let agentCount = 0
+  for (let i = 0; i < files.length; i++) {
+    const scan = scans[i]
+    if (!scan || scan.assistantCount === 0) continue
+    agentCount++
+    for (const [model, u] of Object.entries(scan.usageByModel)) addModelUsage(agentModelUsage, model, toModelUsage(u))
+    if (hasTokens(scan.unattributedUsage)) {
+      const model = await resolveUnknownModel(files[i], fallbackModel)
+      addModelUsage(agentModelUsage, model, toModelUsage(scan.unattributedUsage))
+    }
+  }
+  if (agentCount === 0) return session
+
+  let inputTokens = 0
+  let outputTokens = 0
+  let cacheRead = 0
+  let cacheWrite = 0
+  for (const [model, u] of Object.entries(agentModelUsage)) {
+    addModelUsage(modelUsage, model, u)
+    inputTokens += u.inputTokens
+    outputTokens += u.outputTokens
+    cacheRead += u.cacheReadInputTokens
+    cacheWrite += u.cacheCreationInputTokens
+  }
+
+  return {
+    ...session,
+    input_tokens: session.input_tokens + inputTokens,
+    output_tokens: session.output_tokens + outputTokens,
+    cache_read_input_tokens: (session.cache_read_input_tokens ?? 0) + cacheRead,
+    cache_creation_input_tokens: (session.cache_creation_input_tokens ?? 0) + cacheWrite,
+    model_usage: modelUsage,
+    agent_model_usage: agentModelUsage,
+    agent_count: agentCount,
+    uses_task_agent: true,
+  }
+}
+
+/** withAgentUsage, served from foldedCache for sessions that have gone quiet */
+function foldAgentUsage(session: ParsedSession, jsonlPath: string, mtimeMs: number, now: number): Promise<ParsedSession> {
+  if (now - mtimeMs < QUIET_SESSION_MS) {
+    foldedCache.delete(jsonlPath)
+    return withAgentUsage(session, jsonlPath)
+  }
+  const cached = foldedCache.get(jsonlPath)
+  if (cached && cached.mtimeMs === mtimeMs) return cached.promise
+  const promise = withAgentUsage(session, jsonlPath).catch(err => {
+    foldedCache.delete(jsonlPath)
+    throw err
+  })
+  foldedCache.set(jsonlPath, { mtimeMs, promise })
+  return promise
+}
+
 /**
  * Read all sessions from ~/.claude/projects/<slug>/<session>.jsonl, with an
  * mtime-keyed cache. Completed JSONLs never change, so warm calls only re-parse
  * the file(s) actively being written. The returned objects include enrichment
  * fields (slug_name, cc_version, git_branch, has_compaction, has_thinking) so
- * callers don't need a separate second pass.
+ * callers don't need a separate second pass. Sub-agent transcripts are folded
+ * into each session's token counters, model_usage, agent_model_usage and agent_count.
  */
 export async function getAllParsedSessions(): Promise<ParsedSession[]> {
   let slugs: string[]
@@ -275,29 +424,37 @@ export async function getAllParsedSessions(): Promise<ParsedSession[]> {
     return []
   }
 
-  type FileEntry = { slug: string; filePath: string; sessionId: string; mtimeMs: number }
+  type FileEntry = { slug: string; filePath: string; sessionId: string; mtimeMs: number; hasSessionDir: boolean }
   const fileEntries: FileEntry[] = []
 
   await Promise.all(slugs.map(async (slug) => {
-    const files = await listProjectJSONLFiles(slug)
+    const { files, dirs } = await listProjectEntries(slug)
     await Promise.all(files.map(async (filePath) => {
       try {
         const stat = await fs.stat(filePath)
+        const sessionId = path.basename(filePath, '.jsonl')
         fileEntries.push({
           slug,
           filePath,
-          sessionId: path.basename(filePath, '.jsonl'),
+          sessionId,
           mtimeMs: stat.mtimeMs,
+          hasSessionDir: dirs.has(sessionId),
         })
       } catch { /* file vanished between readdir and stat */ }
     }))
   }))
 
-  // Evict cache entries for files that no longer exist
+  // Evict entries for sessions that no longer exist
   const seen = new Set(fileEntries.map(f => f.filePath))
   for (const key of sessionCache.keys()) {
     if (!seen.has(key)) sessionCache.delete(key)
   }
+  for (const key of foldedCache.keys()) {
+    if (!seen.has(key)) foldedCache.delete(key)
+  }
+  const sessionDirs = [...new Set(fileEntries.filter(f => f.hasSessionDir).map(f => f.filePath.slice(0, -'.jsonl'.length) + path.sep))]
+  pruneScanCache(key => sessionDirs.some(dir => key.startsWith(dir)))
+  const now = Date.now()
 
   // Parse (or reuse cached) with bounded concurrency; cache stores the
   // in-flight promise so concurrent requests for the same file dedupe to one
@@ -305,7 +462,8 @@ export async function getAllParsedSessions(): Promise<ParsedSession[]> {
   const parsed = await mapPool(fileEntries, 16, async (f) => {
     const cached = sessionCache.get(f.filePath)
     if (cached && cached.mtimeMs === f.mtimeMs) {
-      return { slug: f.slug, session: await cached.promise }
+      const session = await cached.promise
+      return { slug: f.slug, session: session && f.hasSessionDir ? await foldAgentUsage(session, f.filePath, f.mtimeMs, now) : session }
     }
     // Failed parses are evicted so a transient read error doesn't hide the
     // session until the file's mtime happens to change again.
@@ -317,7 +475,8 @@ export async function getAllParsedSessions(): Promise<ParsedSession[]> {
       throw err
     })
     sessionCache.set(f.filePath, { mtimeMs: f.mtimeMs, promise })
-    return { slug: f.slug, session: await promise }
+    const session = await promise
+    return { slug: f.slug, session: session && f.hasSessionDir ? await foldAgentUsage(session, f.filePath, f.mtimeMs, now) : session }
   })
 
   // Build slug → cwd map from any session that captured one
@@ -410,14 +569,23 @@ export async function listProjectSlugs(): Promise<string[]> {
 }
 
 export async function listProjectJSONLFiles(slug: string): Promise<string[]> {
+  return (await listProjectEntries(slug)).files
+}
+
+/** Session JSONLs of a project plus the names of its sub-directories, from one readdir */
+async function listProjectEntries(slug: string): Promise<{ files: string[]; dirs: Set<string> }> {
   try {
     const dir = claudePath('projects', slug)
-    const files = await fs.readdir(dir)
-    return files
-      .filter(f => f.endsWith('.jsonl'))
-      .map(f => path.join(dir, f))
+    const entries = await fs.readdir(dir, { withFileTypes: true })
+    const files: string[] = []
+    const dirs = new Set<string>()
+    for (const e of entries) {
+      if (e.isDirectory()) dirs.add(e.name)
+      else if (e.name.endsWith('.jsonl')) files.push(path.join(dir, e.name))
+    }
+    return { files, dirs }
   } catch {
-    return []
+    return { files: [], dirs: new Set() }
   }
 }
 

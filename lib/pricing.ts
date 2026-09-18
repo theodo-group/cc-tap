@@ -180,7 +180,7 @@ function priceModelUsage(modelUsage: Record<string, ModelUsage>): number {
   return sum
 }
 
-/** Whole-session cost from per-model usage, or the top-level counters priced at FALLBACK_MODEL */
+/** Whole-session cost, orchestrator and sub-agents */
 export function sessionCost(s: SessionMeta): number {
   if (s.model_usage && Object.keys(s.model_usage).length > 0) return priceModelUsage(s.model_usage)
   return estimateTotalCostFromModel(FALLBACK_MODEL, {
@@ -191,6 +191,11 @@ export function sessionCost(s: SessionMeta): number {
     costUSD: 0,
     webSearchRequests: 0,
   })
+}
+
+/** The part of sessionCost() spent inside sub-agent transcripts */
+export function agentsCost(s: Pick<SessionMeta, 'agent_model_usage'>): number {
+  return s.agent_model_usage ? priceModelUsage(s.agent_model_usage) : 0
 }
 
 export { getPricing }
