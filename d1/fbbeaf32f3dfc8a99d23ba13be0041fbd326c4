@@ -1,0 +1,71 @@
+types/claude.ts
+  s_d53a6d015a2b9c::t_3b951b77d2edb1 80-81
+lib/pricing.ts
+  s_d53a6d015a2b9c::t_3b951b77d2edb1 1,180-204
+  s_d53a6d015a2b9c::t_2fe586dc98e941 205
+lib/claude-reader.ts
+  s_d53a6d015a2b9c::t_2cb60bc9b5ab55 18
+  s_d53a6d015a2b9c::t_a30de2a30ad86e 444
+  s_d53a6d015a2b9c::t_fb401d510617f9 17
+  s_d53a6d015a2b9c::t_3b951b77d2edb1 7,16,274-276,298-305,307-310,352-353,355,380-382,385,387,389-392,397-408,416,487-488
+  s_d53a6d015a2b9c::t_999290cd9875c9 19-21
+app/api/insights/route.ts
+  s_d53a6d015a2b9c::t_3b951b77d2edb1 3-4
+app/api/projects/trends/route.ts
+  s_d53a6d015a2b9c::t_3b951b77d2edb1 4
+app/api/sessions/route.ts
+  s_d53a6d015a2b9c::t_3b951b77d2edb1 3
+lib/insights.ts
+  s_d53a6d015a2b9c::t_3b951b77d2edb1 2
+components/sessions/session-table.tsx
+  s_d53a6d015a2b9c::t_6def964edced83 9,309
+lib/replay-parser.ts
+  s_d53a6d015a2b9c::t_fb401d510617f9 10
+lib/__tests__/claude-reader.test.ts
+  s_d53a6d015a2b9c::t_6def964edced83 5,127,174-177,181-182,196-197
+app/api/digest/route.ts
+  s_d53a6d015a2b9c::t_3b951b77d2edb1 4-5
+lib/jsonl.ts
+  s_d53a6d015a2b9c::t_fb401d510617f9 1-40
+lib/__tests__/agent-timeline.test.ts
+  s_d53a6d015a2b9c::t_6def964edced83 5-6
+app/api/projects/route.ts
+  s_d53a6d015a2b9c::t_3b951b77d2edb1 3
+app/api/projects/[slug]/route.ts
+  s_d53a6d015a2b9c::t_3b951b77d2edb1 4
+lib/agent-timeline.ts
+  s_d53a6d015a2b9c::t_999290cd9875c9 8
+  s_d53a6d015a2b9c::t_fb401d510617f9 3,5-7,9
+lib/tool-search.ts
+  s_d53a6d015a2b9c::t_fb401d510617f9 1
+lib/workflow-runs.ts
+  s_d53a6d015a2b9c::t_fb401d510617f9 4
+app/api/sessions/[id]/route.ts
+  s_d53a6d015a2b9c::t_3b951b77d2edb1 3
+app/api/wrapped/route.ts
+  s_d53a6d015a2b9c::t_3b951b77d2edb1 3
+app/sessions/[id]/page.tsx
+  s_d53a6d015a2b9c::t_6def964edced83 14,84
+lib/team-reader.ts
+  s_d53a6d015a2b9c::t_3b951b77d2edb1 13
+lib/__tests__/insights.test.ts
+  s_d53a6d015a2b9c::t_276e78c5c884d8 2-3
+lib/transcript-scan.ts
+  s_d53a6d015a2b9c::t_fb401d510617f9 1-285
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "d1fbbeaf32f3dfc8a99d23ba13be0041fbd326c4",
+  "prompts": {},
+  "sessions": {
+    "s_d53a6d015a2b9c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a77e6b59-0d90-4f01-81a3-875c52616164",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
