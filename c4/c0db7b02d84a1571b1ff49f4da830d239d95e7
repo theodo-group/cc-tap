@@ -1,0 +1,48 @@
+components/sessions/session-table.tsx
+  s_f66bcd7c75641e::t_4b1e6f90dc4338 9-10,24-25,27-28,33-35,99-103,274,277,280,370-375,380-381,384,386-388,397-398,400,408
+  s_89f47365505541::t_014661d275c7e4 8,14,19-23,26,29-32,58,87-93,95-98,105-107,110,193-202,218,225,240-257,282-283,286,303,357-369,376-379,382-383,385,389-394,396,399,401,405,407
+components/ui/date-time-picker.tsx
+  s_89f47365505541::t_7425f6940df4d1 1-31,36-83
+  s_89f47365505541::t_2be652c3ddd0ea 32-35
+components/sessions/range-filter.tsx
+  s_89f47365505541::t_7425f6940df4d1 10,12,123-124
+  s_f8a9bc8089c349::t_c8c348dba76a1e 30-31,33
+  s_89f47365505541::t_2166c15542ff1e 1-9,11,13-29,32,34-40,47-81,87-102,119-122,125-127,129-140,142-145,147-157
+  s_89f47365505541::t_d7b7c865a2de61 41-46,82-86,103-118,128,141
+  s_89f47365505541::t_27bdaa88eafed0 146
+app/sessions/page.tsx
+  s_89f47365505541::t_014661d275c7e4 3-4,8-10,15-42,48,50-51,55,62,67-73,75
+  s_89f47365505541::t_b0ad7110ac90cb 74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c4c0db7b02d84a1571b1ff49f4da830d239d95e7",
+  "prompts": {},
+  "sessions": {
+    "s_89f47365505541": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3715f3f7-c827-49dd-93e3-13f9c15a3258",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    },
+    "s_f66bcd7c75641e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "48ec2704-cbd7-4324-aaf1-25ad0d489200",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    },
+    "s_f8a9bc8089c349": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e94dea7-6635-44e4-8bba-bf251e0e4d56",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
