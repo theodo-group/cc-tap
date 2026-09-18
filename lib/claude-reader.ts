@@ -11,6 +11,9 @@ import type {
   LiveSession,
 } from '@/types/claude'
 import { slugToPath } from '@/lib/decode'
+import { mapPool, readJSONLLines } from '@/lib/jsonl'
+
+export { mapPool, readJSONLLines }
 
 function stripXmlTags(text: string): string {
   return text
@@ -19,21 +22,6 @@ function stripXmlTags(text: string): string {
     .replace(/<([a-zA-Z][\w-]*)\b[^>]*>[\s\S]*?<\/\1>/g, '')
     .replace(/<\/?[a-zA-Z][\w-]*\b[^>]*\/?>/g, '')
     .trim()
-}
-
-/** Map with a concurrency cap — keeps cold scans of large ~/.claude dirs from
- * holding hundreds of file streams and parse buffers in flight at once. */
-export async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length)
-  let next = 0
-  async function worker() {
-    while (next < items.length) {
-      const i = next++
-      results[i] = await fn(items[i])
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
-  return results
 }
 
 // Reading every JSONL on every request is the dominant cost at scale (thousands
@@ -431,25 +419,6 @@ export async function listProjectJSONLFiles(slug: string): Promise<string[]> {
   } catch {
     return []
   }
-}
-
-/** Stream a JSONL file line by line, calling cb for each parsed line */
-export async function readJSONLLines(
-  filePath: string,
-  cb: (line: Record<string, unknown>) => void
-): Promise<void> {
-  try {
-    const rl = createInterface({
-      input: createReadStream(filePath, { encoding: 'utf-8' }),
-      crlfDelay: Infinity,
-    })
-    for await (const line of rl) {
-      if (!line.trim()) continue
-      try {
-        cb(JSON.parse(line))
-      } catch { /* skip malformed */ }
-    }
-  } catch { /* file missing */ }
 }
 
 /** Find which project slug contains a given session ID */
