@@ -140,6 +140,8 @@ export interface SessionWithFacet extends SessionMeta {
   git_branch?: string
   has_compaction?: boolean
   has_thinking?: boolean
+  /** Present when the list was requested with ?from&to */
+  slice?: SessionSlice
 }
 
 /** GET /api/sessions?from&to */
@@ -149,6 +151,23 @@ export interface SessionsRangeSummary {
   sessions: number
   tokens: number
   cost: number
+}
+
+export interface SessionsResponse {
+  sessions: SessionWithFacet[]
+  total: number
+  range?: SessionsRangeSummary
+}
+
+/** GET /api/usage-windows: one 5h usage window in which a request was
+ *  rejected for hitting the subscription limit. `start` is inferred as
+ *  reset − 5h; the quota is shared with claude.ai and other devices. */
+export interface UsageWindow {
+  /** ms */
+  reset: number
+  start: number
+  first_hit_at: number
+  sessions: number
 }
 
 // ─── Live Sessions (~/.claude/sessions) ──────────────────────────────────────
