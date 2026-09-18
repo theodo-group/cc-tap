@@ -15,6 +15,7 @@ lib/claude-reader.ts
   s_8f3aacfea40d45::t_5521912072bce7 15,334
   s_1a9bf8d8fab557::t_bb5a47657934b1 339-340,358-361,363,377-379,381-388,432-447,489-491,494,503,516
   s_89f47365505541::t_03795eb263e5e3 19,38-47,56-58,139-140,176,191-197,199-202,230,239-246,298-299,428
+  s_0146c1be56d467::t_d83b6f1828a0a5 392,399-402
 app/sessions/[id]/page.tsx
   s_8f3aacfea40d45::t_521bcbafa22c4e 81-83,85-87,206,263,267-273
   s_8f3aacfea40d45::t_7f1ae789473ca2 174-178,251-253
@@ -31,6 +32,7 @@ components/sessions/session-table.tsx
   s_1a9bf8d8fab557::t_3b9a1e48667751 361
   s_1a9bf8d8fab557::t_55db634a0feea2 255-256,447,449,452-453
   s_89f47365505541::t_014661d275c7e4 8,10,14,19-58,60-84,107,136-142,144-152,154-156,159,242-251,267,274,289-306,323,326,329-332,335,352,406-437,439-444,448,450-451
+  s_0146c1be56d467::t_879a6c754c7dd9 59
 lib/agent-timeline.ts
   s_1a9bf8d8fab557::t_bb5a47657934b1 415
 lib/pricing.ts
@@ -40,6 +42,8 @@ lib/__tests__/session-ledger.test.ts
 lib/session-ledger.ts
   s_89f47365505541::t_3677f40d094b96 1,132
   s_89f47365505541::t_d4e03841c13db9 3-131,133-173,175-223,224-237,239-242
+  s_0146c1be56d467::t_879a6c754c7dd9 2,174
+  s_0146c1be56d467::t_d83b6f1828a0a5 238
 app/api/sessions/route.ts
   s_89f47365505541::t_3677f40d094b96 1-2,4-6,10-16,24-51,53-58
 components/sessions/range-filter.tsx
@@ -62,6 +66,8 @@ app/sessions/page.tsx
 components/ui/date-time-picker.tsx
   s_89f47365505541::t_7425f6940df4d1 1-31,36-83
   s_89f47365505541::t_2be652c3ddd0ea 32-35
+lib/transcript-scan.ts
+  s_0146c1be56d467::t_d83b6f1828a0a5 5,56-57,153,163,213,216,246-255,258
 ---
 {
   "schema_version": "authorship/3.0.0",
@@ -69,6 +75,14 @@ components/ui/date-time-picker.tsx
   "base_commit_sha": "21cc890095c370e5475f7936c3e7ca9ec8d5337c",
   "prompts": {},
   "sessions": {
+    "s_0146c1be56d467": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3515f8f1-ab53-44f5-885f-28f33fb9a4ff",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    },
     "s_1a9bf8d8fab557": {
       "agent_id": {
         "tool": "claude",
