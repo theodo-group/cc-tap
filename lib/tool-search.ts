@@ -1,4 +1,4 @@
-import { readJSONLLines } from '@/lib/claude-reader'
+import { readJSONLLines } from '@/lib/jsonl'
 import { listSubagentFiles, readAgentMeta } from '@/lib/subagent-files'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

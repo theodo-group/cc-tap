@@ -4,7 +4,9 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { SessionBadges } from './session-badges'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatCost, formatDuration, formatDate, projectDisplayName } from '@/lib/decode'
+import { agentsCost } from '@/lib/pricing'
 import type { SessionWithFacet } from '@/types/claude'
 
 const PAGE_SIZE = 25
@@ -170,7 +172,8 @@ export function SessionTable({ sessions }: Props) {
         </span>
       </div>
 
-      {/* Table */}
+      {/* Table; one tooltip provider for every cost cell rather than one per row */}
+      <TooltipProvider delayDuration={100}>
       <div className="border border-border rounded overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
@@ -229,7 +232,7 @@ export function SessionTable({ sessions }: Props) {
                       {totalTools.toLocaleString()}
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-primary">
-                      {formatCost(s.estimated_cost)}
+                      <SessionCostCell session={s} />
                     </td>
                     <td className="px-3 py-2">
                       <SessionBadges
@@ -255,6 +258,7 @@ export function SessionTable({ sessions }: Props) {
           </table>
         </div>
       </div>
+      </TooltipProvider>
 
       {/* Pagination */}
       {totalPages > 1 && (
@@ -296,5 +300,26 @@ export function SessionTable({ sessions }: Props) {
         </div>
       )}
     </div>
+  )
+}
+
+/** Session total; when sub-agents contributed, hover shows the orchestrator / agents split */
+function SessionCostCell({ session }: { session: SessionWithFacet }) {
+  const total = session.estimated_cost ?? 0
+  const agents = agentsCost(session)
+  const agentCount = session.agent_count ?? 0
+  if (agentCount === 0) return <>{formatCost(total)}</>
+  const main = Math.max(0, total - agents)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="cursor-help underline decoration-dotted decoration-primary/40 underline-offset-2">
+          {formatCost(total)}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="left" className="font-mono text-xs">
+        main {formatCost(main)} · agents {formatCost(agents)} · {agentCount} agent{agentCount === 1 ? '' : 's'}
+      </TooltipContent>
+    </Tooltip>
   )
 }

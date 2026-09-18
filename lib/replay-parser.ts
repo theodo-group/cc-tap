@@ -7,7 +7,7 @@ import type {
   ToolCall,
 } from '@/types/claude'
 import { estimateCostFromUsage } from '@/lib/pricing'
-import { readJSONLLines } from '@/lib/claude-reader'
+import { readJSONLLines } from '@/lib/jsonl'
 import { findRewinds } from '@/lib/agent-timeline'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

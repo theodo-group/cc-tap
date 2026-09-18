@@ -75,7 +75,12 @@ export interface SessionMeta {
   files_modified: number
   message_hours: number[]
   user_message_timestamps: string[]
+  /** Per-model usage across the orchestrator and every sub-agent transcript */
   model_usage?: Record<string, ModelUsage>
+  /** Per-model usage of the sub-agent / workflow transcripts alone, a subset of model_usage */
+  agent_model_usage?: Record<string, ModelUsage>
+  /** Sub-agent transcripts (Agent, Task, Workflow runs) that were read for this session */
+  agent_count?: number
 }
 
 // ─── Facets ──────────────────────────────────────────────────────────────────

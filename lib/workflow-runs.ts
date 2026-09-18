@@ -1,7 +1,7 @@
 import path from 'path'
 import { readFile } from 'fs/promises'
 import type { AgentOutcome, CappedText, WorkflowAgentState, WorkflowPhase } from '@/types/claude'
-import { readJSONLLines } from '@/lib/claude-reader'
+import { readJSONLLines } from '@/lib/jsonl'
 
 // ─── On-disk formats, as written by Claude Code ───────────────────────────────
 

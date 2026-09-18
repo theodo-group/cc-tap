@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildInsightsReport, detectSpendAnomalies, sessionCost } from '@/lib/insights'
+import { buildInsightsReport, detectSpendAnomalies } from '@/lib/insights'
+import { sessionCost } from '@/lib/pricing'
 import type { SessionMeta, ModelUsage } from '@/types/claude'
 
 const NOW = new Date('2026-06-10T12:00:00.000Z')

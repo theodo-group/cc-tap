@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAllParsedSessions } from '@/lib/claude-reader'
-import { buildInsightsReport, sessionCost } from '@/lib/insights'
+import { buildInsightsReport } from '@/lib/insights'
+import { sessionCost } from '@/lib/pricing'
 import { readConfig } from '@/lib/config'
 import type { InsightsReport } from '@/lib/insights'
 

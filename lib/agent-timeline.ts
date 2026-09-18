@@ -1,9 +1,12 @@
 import path from 'path'
 import { stat } from 'fs/promises'
-import type { AgentOutcome, AgentRun, AgentTimeline, ContextEvent, PromptTick, TimeSegment, TurnUsage, WorkflowAgentState, WorkflowPhase, WorkflowRun } from '@/types/claude'
+import type { AgentOutcome, AgentRun, AgentTimeline, ContextEvent, WorkflowAgentState, WorkflowPhase, WorkflowRun } from '@/types/claude'
 import { estimateCostFromUsage } from '@/lib/pricing'
-import { mapPool, readJSONLLines } from '@/lib/claude-reader'
-import { resultText } from '@/lib/tool-search'
+import { mapPool } from '@/lib/jsonl'
+import {
+  emptyUsage, readLines, scanFile, scanTranscript,
+  type AnyLine, type LaunchInfo, type Notification, type TranscriptScan,
+} from '@/lib/transcript-scan'
 import {
   WORKFLOW_RUN_ID_RE, listSubagentFiles, listWorkflowRecordIds, listWorkflowRunDirs, readAgentMeta,
   workflowRecordPath, workflowRunDir, type AgentMeta,
@@ -14,90 +17,9 @@ import {
   type JournalEntry, type WorkflowProgressAgent, type WorkflowRecordSummary,
 } from '@/lib/workflow-runs'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyLine = Record<string, any>
-
 /** An agent is considered live when its transcript changed within this window */
 export const RUNNING_WINDOW_MS = 2 * 60_000
 
-interface LaunchInfo {
-  timestamp: string
-  assistant_uuid: string
-  description?: string
-  subagent_type?: string
-  model?: string
-  prompt?: string
-}
-
-interface Notification {
-  taskId: string
-  status: string
-  timestamp: string
-}
-
-/** A Workflow tool_use, from its input */
-export interface WorkflowLaunchInfo {
-  timestamp: string
-  assistant_uuid: string
-  name?: string
-  script_path?: string
-  inline_script: boolean
-  resume_from_run_id?: string
-}
-
-/** A Workflow tool_result, from its structured toolUseResult (or the text as a fallback) */
-export interface WorkflowLaunchResult {
-  run_id: string
-  task_id?: string
-  name?: string
-  summary?: string
-  script_path?: string
-  timestamp: string
-}
-
-/** Facts collected from one transcript (orchestrator or agent) */
-interface TranscriptScan {
-  first?: string
-  last?: string
-  assistantCount: number
-  usage: TurnUsage
-  model?: string
-  /** Agent tool_use id -> launch info */
-  launches: Map<string, LaunchInfo>
-  /** SendMessage target -> timestamps */
-  nudges: Map<string, string[]>
-  notifications: Notification[]
-  /** TaskStop task ids */
-  stops: Set<string>
-  busy: TimeSegment[]
-  prompts: PromptTick[]
-  /** Workflow tool_use id -> launch input */
-  workflowLaunches: Map<string, WorkflowLaunchInfo>
-  /** Workflow tool_use id -> launch result */
-  workflowResults: Map<string, WorkflowLaunchResult>
-}
-
-function emptyUsage(): TurnUsage {
-  return { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
-}
-
-function addUsage(acc: TurnUsage, u: Partial<TurnUsage> | undefined) {
-  if (!u) return
-  acc.input_tokens                += u.input_tokens ?? 0
-  acc.output_tokens               += u.output_tokens ?? 0
-  acc.cache_creation_input_tokens += u.cache_creation_input_tokens ?? 0
-  acc.cache_read_input_tokens     += u.cache_read_input_tokens ?? 0
-}
-
-const NOTIFICATION_RE = /<task-notification>[\s\S]*?<task-id>([^<]+)<\/task-id>[\s\S]*?<status>([^<]+)<\/status>/g
-
-export function parseNotifications(text: string, timestamp: string): Notification[] {
-  const out: Notification[] = []
-  for (const m of text.matchAll(NOTIFICATION_RE)) {
-    out.push({ taskId: m[1].trim(), status: m[2].trim(), timestamp })
-  }
-  return out
-}
 
 export interface Rewind {
   timestamp: string
@@ -166,160 +88,6 @@ export function findContextEvents(lines: AnyLine[]): ContextEvent[] {
   return events.sort((a, b) => a.timestamp.localeCompare(b.timestamp))
 }
 
-/** True when a user line is a message typed by a human (not a tool result, not system-injected) */
-export function isHumanPrompt(l: AnyLine): string | null {
-  if (l.type !== 'user') return null
-  if (l.isMeta === true) return null
-  if (l.origin?.kind === 'task-notification') return null
-  if (l.promptSource === 'system') return null
-  const content = l.message?.content
-  let text = ''
-  if (typeof content === 'string') text = content
-  else if (Array.isArray(content)) {
-    if (content.some((c: AnyLine) => c.type === 'tool_result')) return null
-    text = content.filter((c: AnyLine) => c.type === 'text').map((c: AnyLine) => c.text ?? '').join('')
-  }
-  text = text.trim()
-  if (!text || text.startsWith('<')) return null
-  return text
-}
-
-/**
- * The launch result of a Workflow call. Claude Code stores it structured in the
- * line's `toolUseResult`; when that is missing the text of the result still
- * names the run and task ids.
- */
-function workflowResultOf(line: AnyLine, block: AnyLine, trustStructured: boolean, knownLaunch: boolean, ts: string): WorkflowLaunchResult | undefined {
-  const tur = line.toolUseResult
-  if (trustStructured && tur && typeof tur === 'object' && tur.taskType === 'local_workflow' && typeof tur.runId === 'string') {
-    return {
-      run_id: tur.runId,
-      task_id: typeof tur.taskId === 'string' ? tur.taskId : undefined,
-      name: typeof tur.workflowName === 'string' ? tur.workflowName : undefined,
-      summary: typeof tur.summary === 'string' ? tur.summary : undefined,
-      script_path: typeof tur.scriptPath === 'string' ? tur.scriptPath : undefined,
-      timestamp: ts,
-    }
-  }
-  if (!knownLaunch) return undefined
-  const { run_id, task_id } = parseWorkflowLaunchText(resultText(block.content))
-  return run_id ? { run_id, task_id, timestamp: ts } : undefined
-}
-
-export function scanTranscript(lines: AnyLine[]): TranscriptScan {
-  const scan: TranscriptScan = {
-    assistantCount: 0,
-    usage: emptyUsage(),
-    launches: new Map(),
-    nudges: new Map(),
-    notifications: [],
-    stops: new Set(),
-    busy: [],
-    prompts: [],
-    workflowLaunches: new Map(),
-    workflowResults: new Map(),
-  }
-
-  for (const l of lines) {
-    const ts: string | undefined = l.timestamp
-    if (ts) {
-      if (!scan.first || ts < scan.first) scan.first = ts
-      if (!scan.last || ts > scan.last) scan.last = ts
-    }
-
-    if (l.type === 'system' && l.subtype === 'turn_duration' && ts && typeof l.durationMs === 'number') {
-      const end = new Date(ts).getTime()
-      scan.busy.push({ start: new Date(end - l.durationMs).toISOString(), end: ts })
-      continue
-    }
-
-    if (l.type === 'user') {
-      const content = l.message?.content
-      const text = typeof content === 'string'
-        ? content
-        : Array.isArray(content) ? content.map((c: AnyLine) => c.text ?? '').join('\n') : ''
-      if (text.includes('<task-notification>') && ts) {
-        scan.notifications.push(...parseNotifications(text, ts))
-      }
-      const human = isHumanPrompt(l)
-      if (human && ts) scan.prompts.push({ timestamp: ts, text: human.slice(0, 160) })
-      if (Array.isArray(content)) {
-        const results = content.filter((c: AnyLine) => c?.type === 'tool_result' && typeof c.tool_use_id === 'string')
-        for (const c of results) {
-          const known = scan.workflowLaunches.has(c.tool_use_id)
-          const found = workflowResultOf(l, c, results.length === 1 || known, known, ts ?? '')
-          if (found) scan.workflowResults.set(c.tool_use_id, found)
-        }
-      }
-      continue
-    }
-
-    if (l.type === 'assistant') {
-      scan.assistantCount++
-      const msg = l.message ?? {}
-      addUsage(scan.usage, msg.usage)
-      if (!scan.model && msg.model) scan.model = msg.model
-      const content = Array.isArray(msg.content) ? msg.content : []
-      for (const c of content) {
-        if (c.type !== 'tool_use') continue
-        const input = c.input ?? {}
-        if (c.name === 'Agent' || c.name === 'Task') {
-          scan.launches.set(c.id, {
-            timestamp: ts ?? '',
-            assistant_uuid: l.uuid ?? '',
-            description: input.description,
-            subagent_type: input.subagent_type,
-            model: input.model,
-            prompt: input.prompt,
-          })
-        } else if (c.name === 'SendMessage' && typeof input.to === 'string' && ts) {
-          const list = scan.nudges.get(input.to) ?? []
-          list.push(ts)
-          scan.nudges.set(input.to, list)
-        } else if (c.name === 'TaskStop' && typeof input.task_id === 'string') {
-          scan.stops.add(input.task_id)
-        } else if (c.name === 'Workflow') {
-          // An inline script names itself in its meta block
-          const metaName = typeof input.script === 'string' ? /\bname\s*:\s*(['"`])([^'"`\n]+)\1/.exec(input.script)?.[2] : undefined
-          scan.workflowLaunches.set(c.id, {
-            timestamp: ts ?? '',
-            assistant_uuid: l.uuid ?? '',
-            name: typeof input.name === 'string' ? input.name : metaName,
-            script_path: typeof input.scriptPath === 'string' ? input.scriptPath : undefined,
-            inline_script: typeof input.script === 'string',
-            resume_from_run_id: typeof input.resumeFromRunId === 'string' ? input.resumeFromRunId : undefined,
-          })
-        }
-      }
-    }
-  }
-  return scan
-}
-
-async function readLines(filePath: string): Promise<AnyLine[]> {
-  const lines: AnyLine[] = []
-  await readJSONLLines(filePath, l => lines.push(l))
-  return lines
-}
-
-/**
- * Scans keyed by file identity. A finished transcript never changes, and a
- * session can hold hundreds of them, so repeated requests only pay a stat.
- * The scan holds no line, only the facts, so the cache stays small.
- */
-const scanCache = new Map<string, { mtimeMs: number; size: number; mtime: string; scan: TranscriptScan }>()
-
-async function scanFile(filePath: string): Promise<{ scan: TranscriptScan; mtime?: string }> {
-  let st: { mtimeMs: number; size: number; mtime: Date } | undefined
-  try { st = await stat(filePath) } catch { /* unreadable: scan without caching */ }
-  if (!st) return { scan: scanTranscript(await readLines(filePath)) }
-  const hit = scanCache.get(filePath)
-  if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return { scan: hit.scan, mtime: hit.mtime }
-  const scan = scanTranscript(await readLines(filePath))
-  const entry = { mtimeMs: st.mtimeMs, size: st.size, mtime: st.mtime.toISOString(), scan }
-  scanCache.set(filePath, entry)
-  return { scan, mtime: entry.mtime }
-}
 
 export function resolveOutcome(
   agentId: string,
@@ -644,7 +412,7 @@ export async function parseAgentTimeline(
       duration_ms: Math.max(0, new Date(durationEnd).getTime() - new Date(start).getTime()),
       turns: r.scan.assistantCount,
       usage: r.scan.usage,
-      estimated_cost: estimateCostFromUsage(r.scan.model ?? model ?? '', r.scan.usage),
+      estimated_cost: estimateCostFromUsage(r.scan.model ?? model ?? main.model ?? '', r.scan.usage),
       outcome,
       nudges: (nudges.get(r.id) ?? []).sort(),
       launch_tool_use_id: r.meta.toolUseId,

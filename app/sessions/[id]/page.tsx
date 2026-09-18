@@ -11,6 +11,7 @@ import { UserTurnCard, AssistantTurnCard } from '@/components/sessions/replay/tu
 import { TokenAccumulationChart } from '@/components/sessions/replay/token-accumulation-chart'
 import { SessionBadges } from '@/components/sessions/session-badges'
 import { formatCost, formatTokens, formatDuration, projectDisplayName } from '@/lib/decode'
+import { agentsCost as priceAgents } from '@/lib/pricing'
 import type { AgentTimeline, ReplayData, SessionWithFacet } from '@/types/claude'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -76,6 +77,13 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
     const total_cost = turns.reduce((s, t) => s + (t.estimated_cost ?? 0), 0)
     return { ...replayData, turns, compactions, total_cost }
   }, [replayData, win])
+
+  // Whole-session cost includes sub-agent transcripts (from /api/sessions/[id]);
+  // the replay's per-turn sum is orchestrator-only and is used for a time window.
+  const sessionTotalCost = meta?.estimated_cost ?? replayData?.total_cost ?? 0
+  const agentsCost = meta ? priceAgents(meta) : 0
+  const sessionAgentCount = meta?.agent_count ?? 0
+  const headerCost = win ? (view?.total_cost ?? 0) : sessionTotalCost
 
   const [tab, setTab] = useState('replay')
   // ─── Replay pagination: a 2000-turn session would otherwise block the main thread for seconds
@@ -163,7 +171,11 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
       totalCacheRead  += t.usage.cache_read_input_tokens ?? 0
     }
   }
-  const totalTokens = totalInput + totalOutput + totalCacheWrite + totalCacheRead
+  // Whole-session tokens include sub-agent transcripts, matching the Cost card;
+  // a time window falls back to the orchestrator turns it contains
+  const totalTokens = !win && meta
+    ? meta.input_tokens + meta.output_tokens + (meta.cache_creation_input_tokens ?? 0) + (meta.cache_read_input_tokens ?? 0)
+    : totalInput + totalOutput + totalCacheWrite + totalCacheRead
   const discardedTurns = replay.turns.filter(t => t.type === 'assistant' && t.discarded).length
   const durationMinutes = win ? (win.to - win.from) / 60_000 : (meta?.duration_minutes ?? 0)
 
@@ -191,7 +203,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
       {/* Header */}
       <TopBar
         title={replay.ai_title ?? `${projectName} · ${replay.slug ?? id.slice(0, 8)}`}
-        subtitle={`${projectName} · ${replay.git_branch ?? '?'} · v${replay.version ?? '?'} · ${formatCost(replayData.total_cost ?? 0)}`}
+        subtitle={`${projectName} · ${replay.git_branch ?? '?'} · v${replay.version ?? '?'} · ${formatCost(sessionTotalCost)}`}
       />
 
       {/* Stats cards — match project detail page */}
@@ -236,7 +248,9 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
               <CardTitle className="text-3xl font-bold tabular-nums text-blue-700 dark:text-[#60a5fa]">{formatTokens(totalTokens)}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">Input + output + cache</p>
+              <p className="text-xs text-muted-foreground">
+                {!win && sessionAgentCount > 0 ? 'Input + output + cache, incl. agents' : 'Input + output + cache'}
+              </p>
             </CardContent>
           </Card>
 
@@ -246,11 +260,17 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                 <DollarSign className="h-4 w-4" /> Cost
               </CardDescription>
               <CardTitle className="text-3xl font-bold tabular-nums text-[#d97706]">
-                {formatCost(replay.total_cost ?? 0)}
+                {formatCost(headerCost)}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">{win ? 'Estimated spend in window' : 'Estimated spend'}</p>
+              <p className="text-xs text-muted-foreground">
+                {win
+                  ? 'Estimated orchestrator spend in window'
+                  : sessionAgentCount > 0
+                    ? `main ${formatCost(sessionTotalCost - agentsCost)} · agents ${formatCost(agentsCost)} (${sessionAgentCount})`
+                    : 'Estimated spend'}
+              </p>
             </CardContent>
           </Card>
 
