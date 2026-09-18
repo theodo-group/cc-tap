@@ -9,10 +9,14 @@ interface ModelPricing {
 
 // Vendored defaults — values are $ per million tokens. cacheWrite uses the
 // 5-minute ephemeral rate (the common case); users can override via
-// ~/.cc-lens/pricing.json. Source: claude.com/pricing as of 2026-06.
+// ~/.cc-lens/pricing.json. Source: claude.com/pricing as of 2026-09.
 const DEFAULT_PRICING_PER_MTOK: Record<string, ModelPricing> = {
+  // Fable 5.1 — $10 / $50, cache reads cut to $0.25 (vs 10% of input elsewhere)
+  'claude-fable-5-1':  { input: 10.00, output: 50.00, cacheWrite: 12.50, cacheRead: 0.25 },
   // Fable 5 — $10 / $50
   'claude-fable-5':    { input: 10.00, output: 50.00, cacheWrite: 12.50, cacheRead: 1.00 },
+  // Opus 5 — $5 / $25
+  'claude-opus-5':     { input: 5.00, output: 25.00, cacheWrite: 6.25,  cacheRead: 0.50 },
   // Opus 4.x current generation — $5 / $25
   'claude-opus-4-8':   { input: 5.00, output: 25.00, cacheWrite: 6.25,  cacheRead: 0.50 },
   'claude-opus-4-7':   { input: 5.00, output: 25.00, cacheWrite: 6.25,  cacheRead: 0.50 },
@@ -21,6 +25,8 @@ const DEFAULT_PRICING_PER_MTOK: Record<string, ModelPricing> = {
   // Opus 4.1 / 4.0 — legacy $15 / $75
   'claude-opus-4-1':   { input: 15.00, output: 75.00, cacheWrite: 18.75, cacheRead: 1.50 },
   'claude-opus-4':     { input: 15.00, output: 75.00, cacheWrite: 18.75, cacheRead: 1.50 },
+  // Sonnet 5 — $2 / $10
+  'claude-sonnet-5':   { input: 2.00, output: 10.00, cacheWrite: 2.50,  cacheRead: 0.20 },
   // Sonnet 4.x — $3 / $15
   'claude-sonnet-4-6': { input: 3.00, output: 15.00, cacheWrite: 3.75,  cacheRead: 0.30 },
   'claude-sonnet-4-5': { input: 3.00, output: 15.00, cacheWrite: 3.75,  cacheRead: 0.30 },
@@ -84,12 +90,17 @@ function loadUserOverrides(): Record<string, ModelPricing> {
 }
 
 let cachedPricing: Record<string, ModelPricing> | null = null
+// Table keys, longest first, so date-suffixed IDs resolve to the most specific
+// entry (claude-opus-4-5-20251101 → claude-opus-4-5, while
+// claude-opus-4-20250514 falls through to claude-opus-4's legacy rate).
+let cachedKeysLongestFirst: string[] = []
 function getPricingTable(): Record<string, ModelPricing> {
   if (cachedPricing) return cachedPricing
   const merged: Record<string, ModelPricing> = { ...DEFAULT_PRICING_PER_MTOK, ...loadUserOverrides() }
   const perToken: Record<string, ModelPricing> = {}
   for (const [k, v] of Object.entries(merged)) perToken[k] = toPerToken(v)
   cachedPricing = perToken
+  cachedKeysLongestFirst = Object.keys(perToken).sort((a, b) => b.length - a.length)
   return perToken
 }
 
@@ -114,17 +125,14 @@ export const FALLBACK_MODEL = 'claude-opus-4-8'
 /** True when we have an exact or prefix pricing entry for this model (vs the fallback guess). */
 export function hasKnownPricing(model: string): boolean {
   const table = getPricingTable()
-  return Object.keys(table).some(key => matchesPricingKey(model, key))
+  if (table[model]) return true
+  return cachedKeysLongestFirst.some(key => matchesPricingKey(model, key))
 }
 
 function getPricing(model: string): ModelPricing {
   const table = getPricingTable()
   if (table[model]) return table[model]
-  // Prefix match, longest key first so date-suffixed IDs resolve to the most
-  // specific entry (claude-opus-4-5-20251101 → claude-opus-4-5, while
-  // claude-opus-4-20250514 falls through to claude-opus-4's legacy rate).
-  const keys = Object.keys(table).sort((a, b) => b.length - a.length)
-  for (const key of keys) {
+  for (const key of cachedKeysLongestFirst) {
     if (matchesPricingKey(model, key)) return table[key]
   }
   return table[FALLBACK_MODEL]

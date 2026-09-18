@@ -85,8 +85,8 @@ describe('buildInsightsReport', () => {
     const insight = report.insights.find(i => i.id === 'premium-model-light-sessions')
     expect(insight).toBeDefined()
     expect(insight!.affected_sessions).toBe(1)
-    // Opus 4.8: 2M*$5 + 0.2M*$25 = $15; Sonnet 4.6: 2M*$3 + 0.2M*$15 = $9 → $6 saved
-    expect(insight!.monthly_savings_usd).toBeCloseTo(6, 0)
+    // Opus 4.8: 2M*$5 + 0.2M*$25 = $15; Sonnet 5: 2M*$2 + 0.2M*$10 = $6 → $9 saved
+    expect(insight!.monthly_savings_usd).toBeCloseTo(9, 0)
   })
 
   it('does not flag long or agentic sessions for model downgrade', () => {
