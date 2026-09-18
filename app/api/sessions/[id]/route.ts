@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAllParsedSessions } from '@/lib/claude-reader'
-import { sessionCost } from '@/lib/insights'
+import { sessionCost } from '@/lib/pricing'
 
 export const dynamic = 'force-dynamic'
 

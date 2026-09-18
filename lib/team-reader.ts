@@ -10,7 +10,7 @@ import type {
   SessionMeta,
   ModelUsage,
 } from '@/types/claude'
-import { estimateTotalCostFromModel, estimateCostFromUsage, cacheEfficiency } from '@/lib/pricing'
+import { estimateTotalCostFromModel, estimateCostFromUsage, cacheEfficiency, sessionCost } from '@/lib/pricing'
 
 /**
  * Zero-infra team mode: every member drops a redacted .cclens-team.json into
@@ -58,20 +58,6 @@ export async function readTeamExports(dir = teamDir()): Promise<{ exports: TeamE
   return { exports, errors }
 }
 
-function sessionCost(s: SessionMeta): number {
-  if (s.model_usage && Object.keys(s.model_usage).length > 0) {
-    return Object.entries(s.model_usage).reduce(
-      (sum, [model, usage]) => sum + estimateTotalCostFromModel(model, usage),
-      0
-    )
-  }
-  return estimateCostFromUsage('claude-opus-4-8', {
-    input_tokens: s.input_tokens,
-    output_tokens: s.output_tokens,
-    cache_creation_input_tokens: s.cache_creation_input_tokens ?? 0,
-    cache_read_input_tokens: s.cache_read_input_tokens ?? 0,
-  })
-}
 
 function mergeModelUsage(target: Record<string, ModelUsage>, source?: Record<string, ModelUsage>) {
   if (!source) return

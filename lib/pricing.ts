@@ -1,4 +1,4 @@
-import type { TurnUsage, ModelUsage } from '@/types/claude'
+import type { TurnUsage, ModelUsage, SessionMeta } from '@/types/claude'
 
 interface ModelPricing {
   input: number
@@ -108,6 +108,9 @@ function matchesPricingKey(model: string, key: string): boolean {
   return model === key || model.startsWith(`${key}-`)
 }
 
+/** Priced when no model is known: an unrecognised id, or a session whose assistant lines carry no model */
+export const FALLBACK_MODEL = 'claude-opus-4-8'
+
 /** True when we have an exact or prefix pricing entry for this model (vs the fallback guess). */
 export function hasKnownPricing(model: string): boolean {
   const table = getPricingTable()
@@ -124,8 +127,7 @@ function getPricing(model: string): ModelPricing {
   for (const key of keys) {
     if (matchesPricingKey(model, key)) return table[key]
   }
-  // Unknown model — assume current Opus rates rather than legacy ones
-  return table['claude-opus-4-8']
+  return table[FALLBACK_MODEL]
 }
 
 export function estimateCostFromUsage(model: string, usage: TurnUsage): number {
@@ -170,6 +172,25 @@ export function estimateTotalCostFromModel(model: string, usage: ModelUsage): nu
     (usage.cacheCreationInputTokens   ?? 0) * p.cacheWrite +
     (usage.cacheReadInputTokens       ?? 0) * p.cacheRead
   )
+}
+
+function priceModelUsage(modelUsage: Record<string, ModelUsage>): number {
+  let sum = 0
+  for (const [model, usage] of Object.entries(modelUsage)) sum += estimateTotalCostFromModel(model, usage)
+  return sum
+}
+
+/** Whole-session cost from per-model usage, or the top-level counters priced at FALLBACK_MODEL */
+export function sessionCost(s: SessionMeta): number {
+  if (s.model_usage && Object.keys(s.model_usage).length > 0) return priceModelUsage(s.model_usage)
+  return estimateTotalCostFromModel(FALLBACK_MODEL, {
+    inputTokens: s.input_tokens ?? 0,
+    outputTokens: s.output_tokens ?? 0,
+    cacheCreationInputTokens: s.cache_creation_input_tokens ?? 0,
+    cacheReadInputTokens: s.cache_read_input_tokens ?? 0,
+    costUSD: 0,
+    webSearchRequests: 0,
+  })
 }
 
 export { getPricing }

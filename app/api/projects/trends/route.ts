@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSessions, listProjectSlugs, resolveProjectPath } from '@/lib/claude-reader'
 import { projectDisplayName } from '@/lib/decode'
-import { sessionCost } from '@/lib/insights'
+import { sessionCost } from '@/lib/pricing'
 import type { ProjectTrend, ProjectTrendPoint, SessionMeta } from '@/types/claude'
 
 export const dynamic = 'force-dynamic'

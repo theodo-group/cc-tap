@@ -11,7 +11,7 @@ import { OverviewConversationTable } from '@/components/overview/conversation-ta
 import { LiveSessionsPanel } from '@/components/overview/live-sessions-panel'
 import { StatCard } from '@/components/overview/stat-card'
 import { formatTokens, formatBytes } from '@/lib/decode'
-import { estimateCostFromUsage, estimateTotalCostFromModel, getPricing } from '@/lib/pricing'
+import { FALLBACK_MODEL, getPricing } from '@/lib/pricing'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -82,19 +82,10 @@ function filterActivityByRange(dailyActivity: DailyActivity[], from: Date, to: D
   return dailyActivity.filter(d => inRange(d.date, from, to))
 }
 
+/** The API already prices each session; reuse it rather than re-deriving
+ *  so every page shows the same figure. */
 function sessionCost(session: SessionWithFacet): number {
-  if (session.model_usage && Object.keys(session.model_usage).length > 0) {
-    return Object.entries(session.model_usage).reduce(
-      (sum, [model, usage]) => sum + estimateTotalCostFromModel(model, usage),
-      0
-    )
-  }
-  return estimateCostFromUsage('claude-opus-4-7', {
-    input_tokens: session.input_tokens ?? 0,
-    output_tokens: session.output_tokens ?? 0,
-    cache_creation_input_tokens: session.cache_creation_input_tokens ?? 0,
-    cache_read_input_tokens: session.cache_read_input_tokens ?? 0,
-  })
+  return session.estimated_cost ?? 0
 }
 
 function sessionCacheSavings(session: SessionWithFacet): number {
@@ -104,7 +95,7 @@ function sessionCacheSavings(session: SessionWithFacet): number {
       return sum + ((usage.cacheReadInputTokens ?? 0) * (p.input - p.cacheRead))
     }, 0)
   }
-  const p = getPricing('claude-opus-4-7')
+  const p = getPricing(FALLBACK_MODEL)
   return (session.cache_read_input_tokens ?? 0) * (p.input - p.cacheRead)
 }
 

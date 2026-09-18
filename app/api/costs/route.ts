@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSessions } from '@/lib/claude-reader'
-import { estimateTotalCostFromModel, cacheEfficiency } from '@/lib/pricing'
+import { FALLBACK_MODEL, estimateTotalCostFromModel, cacheEfficiency } from '@/lib/pricing'
 import { projectDisplayName } from '@/lib/decode'
 import type { CostAnalytics, ModelCostBreakdown, DailyCost, ProjectCost, ModelUsage, SessionMeta } from '@/types/claude'
 
@@ -47,7 +47,7 @@ function sessionModelUsage(session: SessionMeta): Record<string, ModelUsage> {
     return session.model_usage
   }
   return {
-    'claude-opus-4-7': {
+    [FALLBACK_MODEL]: {
       inputTokens: session.input_tokens ?? 0,
       outputTokens: session.output_tokens ?? 0,
       cacheCreationInputTokens: session.cache_creation_input_tokens ?? 0,

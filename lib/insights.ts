@@ -1,5 +1,5 @@
 import type { SessionMeta, ModelUsage } from '@/types/claude'
-import { getPricing, estimateTotalCostFromModel, cacheEfficiency } from '@/lib/pricing'
+import { getPricing, estimateTotalCostFromModel, cacheEfficiency, sessionCost } from '@/lib/pricing'
 
 // Savings insights: each detector looks at a window of sessions and, where it
 // can, attaches a dollar figure. Estimates are deliberately conservative —
@@ -37,24 +37,6 @@ export interface InsightsReport {
 
 type SessionLike = SessionMeta & { has_compaction?: boolean }
 
-export function sessionCost(s: SessionMeta): number {
-  if (s.model_usage && Object.keys(s.model_usage).length > 0) {
-    return Object.entries(s.model_usage).reduce(
-      (sum, [model, usage]) => sum + estimateTotalCostFromModel(model, usage),
-      0
-    )
-  }
-  // Legacy sessions only carry top-level token counters; price them the same
-  // way the costs API does so the two endpoints agree.
-  return estimateTotalCostFromModel('claude-opus-4-7', {
-    inputTokens: s.input_tokens ?? 0,
-    outputTokens: s.output_tokens ?? 0,
-    cacheCreationInputTokens: s.cache_creation_input_tokens ?? 0,
-    cacheReadInputTokens: s.cache_read_input_tokens ?? 0,
-    costUSD: 0,
-    webSearchRequests: 0,
-  })
-}
 
 function mergeUsage(target: Record<string, ModelUsage>, source?: Record<string, ModelUsage>) {
   if (!source) return
