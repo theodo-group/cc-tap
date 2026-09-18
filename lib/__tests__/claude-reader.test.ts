@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import { FALLBACK_MODEL, agentsCost, sessionCost } from '@/lib/pricing'
+import { sliceSession } from '@/lib/session-ledger'
 
 // Fixture-driven test against a fake ~/.claude dir. CLAUDE_CONFIG_DIR is read
 // at module load, so the reader is imported dynamically after env setup.
@@ -108,6 +109,35 @@ afterAll(async () => {
   else process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
   vi.resetModules()
   await fs.rm(tmpDir, { recursive: true, force: true })
+})
+
+describe('getAllSessionRecords', () => {
+  it('publishes exactly the ledger summed over the whole session', async () => {
+    const records = await reader.getAllSessionRecords()
+    expect(records).toHaveLength(3)
+    for (const r of records) {
+      const s = r.session
+      // Sub-agent turns can land after the orchestrator's last line, so the
+      // window covers every turn rather than [start_time, last_activity]
+      const slice = sliceSession(r, { from: 0, to: Number.MAX_SAFE_INTEGER })!
+      expect(slice.input_tokens).toBe(s.input_tokens)
+      expect(slice.output_tokens).toBe(s.output_tokens)
+      expect(slice.cache_read_input_tokens).toBe(s.cache_read_input_tokens)
+      expect(slice.cache_creation_input_tokens).toBe(s.cache_creation_input_tokens)
+      expect(slice.user_message_count).toBe(s.user_message_count)
+      expect(slice.assistant_message_count).toBe(s.assistant_message_count)
+      expect(slice.tool_calls).toBe(Object.values(s.tool_counts).reduce((a, c) => a + c, 0))
+      expect(slice.model_usage).toEqual(s.model_usage)
+      expect(slice.estimated_cost).toBeCloseTo(sessionCost(s), 10)
+      expect(slice.agents_cost).toBeCloseTo(agentsCost(s), 10)
+    }
+  })
+
+  it('keeps the ledger and rate-limit hits off the public session', async () => {
+    const [r] = await reader.getAllSessionRecords()
+    expect('ledger' in r.session).toBe(false)
+    expect('rate_limit_hits' in r.session).toBe(false)
+  })
 })
 
 describe('getAllParsedSessions', () => {

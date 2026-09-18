@@ -101,6 +101,36 @@ export interface Facet {
 
 // ─── Session with Facet joined ───────────────────────────────────────────────
 
+/** The numbers a session is measured by, whole or restricted to a time window.
+ *  Whole-session values come from `sessionMetrics()`, windowed ones from
+ *  `sliceSession()`; both live in lib/session-ledger.ts. */
+export interface SessionMetrics {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens: number
+  cache_creation_input_tokens: number
+  user_message_count: number
+  /** orchestrator turns only, like SessionMeta.assistant_message_count */
+  assistant_message_count: number
+  /** orchestrator tool_use blocks only, like SessionMeta.tool_counts */
+  tool_calls: number
+  duration_minutes: number
+  /** tokens (all four kinds) spent by sub-agent turns */
+  agents_tokens: number
+  agents_cost: number
+  model_usage: Record<string, ModelUsage>
+  estimated_cost: number
+}
+
+/** A session's metrics restricted to the turns inside a time window */
+export interface SessionSlice extends SessionMetrics {
+  /** ms, inclusive */
+  from: number
+  to: number
+  /** the session starts before `from` or keeps going after `to` */
+  partial: boolean
+}
+
 export interface SessionWithFacet extends SessionMeta {
   facet?: Facet
   estimated_cost: number
@@ -110,6 +140,15 @@ export interface SessionWithFacet extends SessionMeta {
   git_branch?: string
   has_compaction?: boolean
   has_thinking?: boolean
+}
+
+/** GET /api/sessions?from&to */
+export interface SessionsRangeSummary {
+  from: number
+  to: number
+  sessions: number
+  tokens: number
+  cost: number
 }
 
 // ─── Live Sessions (~/.claude/sessions) ──────────────────────────────────────

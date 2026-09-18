@@ -182,28 +182,44 @@ export function estimateTotalCostFromModel(model: string, usage: ModelUsage): nu
   )
 }
 
-function priceModelUsage(modelUsage: Record<string, ModelUsage>): number {
-  let sum = 0
-  for (const [model, usage] of Object.entries(modelUsage)) sum += estimateTotalCostFromModel(model, usage)
-  return sum
+/** Plain token totals, the SessionMeta field names */
+export interface TokenTotals {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens?: number
+  cache_creation_input_tokens?: number
 }
 
-/** Whole-session cost, orchestrator and sub-agents */
-export function sessionCost(s: SessionMeta): number {
-  if (s.model_usage && Object.keys(s.model_usage).length > 0) return priceModelUsage(s.model_usage)
+/**
+ * Price per-model usage. When nothing is attributed to a model, `totals`
+ * (if given) are priced at the fallback model's rate, the best guess for
+ * transcripts whose assistant lines carry no model name.
+ */
+export function costOfUsage(modelUsage: Record<string, ModelUsage> | undefined, totals?: TokenTotals): number {
+  if (modelUsage && Object.keys(modelUsage).length > 0) {
+    let total = 0
+    for (const [model, usage] of Object.entries(modelUsage)) total += estimateTotalCostFromModel(model, usage)
+    return total
+  }
+  if (!totals) return 0
   return estimateTotalCostFromModel(FALLBACK_MODEL, {
-    inputTokens: s.input_tokens ?? 0,
-    outputTokens: s.output_tokens ?? 0,
-    cacheCreationInputTokens: s.cache_creation_input_tokens ?? 0,
-    cacheReadInputTokens: s.cache_read_input_tokens ?? 0,
+    inputTokens: totals.input_tokens ?? 0,
+    outputTokens: totals.output_tokens ?? 0,
+    cacheCreationInputTokens: totals.cache_creation_input_tokens ?? 0,
+    cacheReadInputTokens: totals.cache_read_input_tokens ?? 0,
     costUSD: 0,
     webSearchRequests: 0,
   })
 }
 
+/** Whole-session cost: per-model usage when known, else the totals at the fallback rate */
+export function sessionCost(s: SessionMeta): number {
+  return costOfUsage(s.model_usage, s)
+}
+
 /** The part of sessionCost() spent inside sub-agent transcripts */
 export function agentsCost(s: Pick<SessionMeta, 'agent_model_usage'>): number {
-  return s.agent_model_usage ? priceModelUsage(s.agent_model_usage) : 0
+  return costOfUsage(s.agent_model_usage)
 }
 
 export { getPricing }

@@ -2,6 +2,7 @@ import { stat } from 'fs/promises'
 import { z } from 'zod'
 import type { PromptTick, TimeSegment, TurnUsage } from '@/types/claude'
 import { readJSONLLines } from '@/lib/jsonl'
+import { LedgerBuilder, NO_MODEL, type TurnLedger } from '@/lib/session-ledger'
 import { resultText } from '@/lib/tool-search'
 import { parseWorkflowLaunchText } from '@/lib/workflow-runs'
 
@@ -52,6 +53,8 @@ export interface TranscriptScan {
   usageByModel: Record<string, TurnUsage>
   /** Usage of messages that carry no model; the caller attributes it */
   unattributedUsage: TurnUsage
+  /** Per-turn record of the assistant messages, for range slicing */
+  ledger: TurnLedger
   model?: string
   /** Agent tool_use id -> launch info */
   launches: Map<string, LaunchInfo>
@@ -147,6 +150,7 @@ export function scanTranscript(lines: AnyLine[]): TranscriptScan {
     usage: emptyUsage(),
     usageByModel: {},
     unattributedUsage: emptyUsage(),
+    ledger: new LedgerBuilder().build(),
     launches: new Map(),
     nudges: new Map(),
     notifications: [],
@@ -156,6 +160,7 @@ export function scanTranscript(lines: AnyLine[]): TranscriptScan {
     workflowLaunches: new Map(),
     workflowResults: new Map(),
   }
+  const ledger = new LedgerBuilder()
 
   for (const l of lines) {
     const ts: string | undefined = l.timestamp
@@ -205,8 +210,10 @@ export function scanTranscript(lines: AnyLine[]): TranscriptScan {
         if (!scan.model && model) scan.model = model
       }
       const content = Array.isArray(msg.content) ? msg.content : []
+      let toolCalls = 0
       for (const c of content) {
         if (c.type !== 'tool_use') continue
+        toolCalls++
         const input = c.input ?? {}
         if (c.name === 'Agent' || c.name === 'Task') {
           scan.launches.set(c.id, {
@@ -236,8 +243,19 @@ export function scanTranscript(lines: AnyLine[]): TranscriptScan {
           })
         }
       }
+      if (ts && priced.success && priced.data.usage) {
+        const u = priced.data.usage
+        ledger.addTurn({
+          ts: new Date(ts).getTime(),
+          model: priced.data.model ?? NO_MODEL,
+          input: u.input_tokens, output: u.output_tokens,
+          cacheRead: u.cache_read_input_tokens, cacheWrite: u.cache_creation_input_tokens,
+          toolCalls,
+        })
+      }
     }
   }
+  scan.ledger = ledger.build()
   return scan
 }
 
