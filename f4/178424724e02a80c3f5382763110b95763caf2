@@ -1,0 +1,27 @@
+lib/tool-search.ts
+  s_061fbcc9f3d5a7::t_a26cde8a45247c 1
+lib/claude-reader.ts
+  s_061fbcc9f3d5a7::t_a26cde8a45247c 14-16
+lib/workflow-runs.ts
+  s_061fbcc9f3d5a7::t_a26cde8a45247c 4
+lib/replay-parser.ts
+  s_061fbcc9f3d5a7::t_a26cde8a45247c 10
+lib/jsonl.ts
+  s_061fbcc9f3d5a7::t_a26cde8a45247c 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f4178424724e02a80c3f5382763110b95763caf2",
+  "prompts": {},
+  "sessions": {
+    "s_061fbcc9f3d5a7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "efc74cce-eb35-4809-b0f2-84b3705ab003",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
