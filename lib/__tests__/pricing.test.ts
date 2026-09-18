@@ -10,6 +10,7 @@ afterAll(() => {
   else process.env.CC_LENS_CONFIG_DIR = previousConfigDir
 })
 
+import type { TurnUsage } from '@/types/claude'
 import {
   getPricing,
   hasKnownPricing,
@@ -28,10 +29,26 @@ describe('getPricing', () => {
     expect(getPricing('claude-haiku-4-5').input * MTOK).toBeCloseTo(1)
   })
 
+  it('prices the Claude 5 generation directly instead of via prefix or fallback', () => {
+    // Fable 5.1 has a reduced cache-read rate; must not inherit Fable 5's $1.00
+    expect(getPricing('claude-fable-5-1').cacheRead * MTOK).toBeCloseTo(0.25)
+    expect(getPricing('claude-fable-5-1').input * MTOK).toBeCloseTo(10)
+    expect(getPricing('claude-fable-5').cacheRead * MTOK).toBeCloseTo(1)
+    expect(getPricing('claude-opus-5').input * MTOK).toBeCloseTo(5)
+    expect(getPricing('claude-sonnet-5').input * MTOK).toBeCloseTo(2)
+    expect(getPricing('claude-sonnet-5').output * MTOK).toBeCloseTo(10)
+    expect(hasKnownPricing('claude-sonnet-5')).toBe(true)
+  })
+
   it('resolves date-suffixed IDs to the most specific prefix', () => {
     // claude-opus-4-5-20251101 must hit the 4.5 entry ($5), not legacy claude-opus-4
     expect(getPricing('claude-opus-4-5-20251101').input * MTOK).toBeCloseTo(5)
     expect(getPricing('claude-haiku-4-5-20251001').input * MTOK).toBeCloseTo(1)
+    // claude-fable-5-1-* must hit the 5.1 entry ($0.25 cache read), not claude-fable-5 ($1.00)
+    expect(getPricing('claude-fable-5-1-20260901').cacheRead * MTOK).toBeCloseTo(0.25)
+    expect(getPricing('claude-fable-5-20260601').cacheRead * MTOK).toBeCloseTo(1)
+    expect(getPricing('claude-opus-5-20260801').input * MTOK).toBeCloseTo(5)
+    expect(getPricing('claude-sonnet-5-20260801').input * MTOK).toBeCloseTo(2)
   })
 
   it('resolves legacy Opus 4 date-suffixed IDs to legacy rates', () => {
@@ -66,7 +83,7 @@ describe('estimateCostFromUsage', () => {
   })
 
   it('treats missing fields as zero', () => {
-    expect(estimateCostFromUsage('claude-opus-4-8', {})).toBe(0)
+    expect(estimateCostFromUsage('claude-opus-4-8', {} as TurnUsage)).toBe(0)
   })
 })
 

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
-import { BarChart3, PieChart, Clock, CalendarDays } from 'lucide-react'
+import { BarChart3, PieChart, Clock } from 'lucide-react'
 import { UsageOverTimeChart } from '@/components/overview/usage-over-time-chart'
 import { ModelBreakdownDonut } from '@/components/overview/model-breakdown-donut'
 import { ProjectActivityDonut } from '@/components/overview/project-activity-donut'
@@ -13,11 +13,9 @@ import { StatCard } from '@/components/overview/stat-card'
 import { formatTokens, formatBytes } from '@/lib/decode'
 import { FALLBACK_MODEL, getPricing } from '@/lib/pricing'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Calendar } from '@/components/ui/calendar'
+import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker'
 import type { StatsCache, DailyActivity } from '@/types/claude'
 import type { SessionWithFacet, ProjectSummary } from '@/types/claude'
 import { format, subDays } from 'date-fns'
@@ -46,7 +44,7 @@ interface ApiResponse {
 }
 
 type DatePreset = '7d' | '30d' | '90d'
-type CustomRange = { from?: Date; to?: Date }
+type CustomRange = DateRange
 
 const fetcher = (url: string) =>
   fetch(url).then(r => {
@@ -105,7 +103,6 @@ export function OverviewClient() {
   const { theme } = useTheme()
   const [datePreset, setDatePreset] = useState<DatePreset>('30d')
   const [customRange, setCustomRange] = useState<CustomRange>({})
-  const [pickerOpen, setPickerOpen] = useState(false)
 
   const { data, error, isLoading } = useSWR<ApiResponse>('/api/stats', fetcher, {
     refreshInterval: 5_000,
@@ -132,10 +129,6 @@ export function OverviewClient() {
   const effectiveDateTo = usingCustom
     ? format(customRange.to!, 'MM/dd/yyyy')
     : format(new Date(), 'MM/dd/yyyy')
-
-  const pickerLabel = usingCustom
-    ? `${format(customRange.from!, 'MMM d')} – ${format(customRange.to!, 'MMM d, yyyy')}`
-    : 'Pick a date'
 
   // Error has to be checked before the loading skeleton: on a failed first
   // load `data` stays undefined forever, which would pin us on the skeleton.
@@ -369,30 +362,7 @@ export function OverviewClient() {
             </TabsList>
           </Tabs>
 
-          <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant={usingCustom ? 'default' : 'outline'}
-                size="sm"
-                className="gap-2"
-              >
-                <CalendarDays className="w-3.5 h-3.5" />
-                {pickerLabel}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar
-                mode="range"
-                selected={{ from: customRange.from, to: customRange.to }}
-                onSelect={range => {
-                  setCustomRange({ from: range?.from, to: range?.to })
-                  if (range?.from && range?.to) setPickerOpen(false)
-                }}
-                disabled={{ after: new Date() }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
+          <DateRangePicker value={customRange} onChange={setCustomRange} />
 
         </div>
       </div>

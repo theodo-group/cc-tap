@@ -30,6 +30,9 @@ This project follows a simple changelog format:
 
 ### Changed
 
+- Pricing defaults refreshed for the Claude 5 generation: adds Fable 5.1 ($10/$50, cache reads $0.25/MTok instead of $1.00), Opus 5 ($5/$25) and Sonnet 5 ($2/$10). Fable 5.1 sessions were previously priced through the `claude-fable-5` prefix, so their cache-read cost drops 4x; a `~/.cc-lens/pricing.json` override keyed on `claude-fable-5` no longer covers 5.1 and needs its own `claude-fable-5-1` entry.
+- The "short sessions ran on a premium model" insight now prices its Sonnet counterfactual at Sonnet 5 rates, so the reported monthly saving grows.
+- Model labels across the overview donut, cost chart, token table and replay turn cards recognise Fable 5.1, Fable 5, Opus 5, Opus 4.8 and Sonnet 5 instead of showing raw ids.
 - The `Workflow` (and `Agent`) tool calls count toward the agents session facet and the "Agents" tool category, so workflow-only sessions get the agents badge in the session table.
 
 ### Fixed

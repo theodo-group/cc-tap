@@ -6,24 +6,37 @@ import { formatCost } from '@/lib/decode'
 import type { DailyCost } from '@/types/claude'
 
 const MODEL_COLORS: Record<string, string> = {
+  'claude-fable-5-1':       '#ec4899',
+  'claude-fable-5':         '#a21caf',
+  'claude-opus-5':          '#ef4444',
+  'claude-opus-4-8':        '#fb923c',
   'claude-opus-4-7':        '#f97316',
   'claude-opus-4-6':        '#d97706',
   'claude-opus-4-5-20251101': '#a78bfa',
+  'claude-sonnet-5':        '#2563eb',
   'claude-sonnet-4-6':      'var(--viz-sky)',
   'claude-haiku-4-5':       '#34d399',
 }
 
+// Longest key first so claude-fable-5-1-* takes the 5.1 colour, not Fable 5's
+const MODEL_COLOR_KEYS = Object.keys(MODEL_COLORS).sort((a, b) => b.length - a.length)
+
 function colorForModel(m: string): string {
-  for (const [key, col] of Object.entries(MODEL_COLORS)) {
-    if (m.includes(key.split('-').slice(2).join('-'))) return col
+  for (const key of MODEL_COLOR_KEYS) {
+    if (m === key || m.startsWith(`${key}-`)) return MODEL_COLORS[key]
   }
   return '#7a8494'
 }
 
 function shortModel(m: string): string {
+  if (m.includes('fable-5-1'))  return 'Fable 5.1'
+  if (m.includes('fable-5'))    return 'Fable 5'
+  if (m.includes('opus-5'))     return 'Opus 5'
+  if (m.includes('opus-4-8'))   return 'Opus 4.8'
   if (m.includes('opus-4-7'))   return 'Opus 4.7'
   if (m.includes('opus-4-6'))   return 'Opus 4.6'
   if (m.includes('opus-4-5'))   return 'Opus 4.5'
+  if (m.includes('sonnet-5'))   return 'Sonnet 5'
   if (m.includes('sonnet-4-6')) return 'Sonnet 4.6'
   if (m.includes('haiku-4-5'))  return 'Haiku 4.5'
   return m

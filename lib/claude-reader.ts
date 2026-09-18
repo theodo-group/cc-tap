@@ -16,6 +16,7 @@ import { listSubagentFiles, readAgentMeta, type SubagentFile } from '@/lib/subag
 import { pruneScanCache, scanFile } from '@/lib/transcript-scan'
 import { mapPool, readJSONLLines } from '@/lib/jsonl'
 import { FALLBACK_MODEL } from '@/lib/pricing'
+import { LedgerBuilder, NO_MODEL, hasModeledTurns, ledgerMetrics, type TurnLedger } from '@/lib/session-ledger'
 
 export { mapPool, readJSONLLines }
 
@@ -34,6 +35,16 @@ function stripXmlTags(text: string): string {
 // mtime — completed sessions never change, so warm requests only re-parse files
 // that were touched since the last scan.
 
+/** A 5h-window limit hit recorded in the transcript: an assistant line with
+ *  `error: "rate_limit"` and `quotaLimits: { status: "rejected",
+ *  rateLimitType: "five_hour", resetsAt }` (undocumented, observed locally). */
+export interface RateLimitHit {
+  /** ms, when the request was rejected */
+  ts: number
+  /** ms, when the window resets */
+  resets_at: number
+}
+
 export interface ParsedSession extends SessionMeta {
   cwd?: string
   slug_name?: string
@@ -44,9 +55,19 @@ export interface ParsedSession extends SessionMeta {
   has_thinking: boolean
 }
 
+/** What the parser keeps per session: the public session plus the
+ *  server-side working data that never reaches an API payload. */
+export interface SessionRecord {
+  session: ParsedSession
+  /** Per-turn record; the session's counters are this ledger summed */
+  ledger: TurnLedger
+  /** Five-hour limit rejections, for /api/usage-windows */
+  rate_limit_hits: RateLimitHit[]
+}
+
 interface CacheEntry {
   mtimeMs: number
-  promise: Promise<ParsedSession | null>
+  promise: Promise<SessionRecord | null>
 }
 
 const sessionCache = new Map<string, CacheEntry>()
@@ -97,16 +118,10 @@ export async function readStatsCache(): Promise<StatsCache | null> {
 
 // ─── Sessions from Project JSONL (primary source) ──────────────────────────────
 
-async function parseSessionFile(filePath: string, sessionId: string): Promise<ParsedSession | null> {
+async function parseSessionFile(filePath: string, sessionId: string): Promise<SessionRecord | null> {
   let startTime = ''
   let lastTime = ''
-  let userCount = 0
-  let assistantCount = 0
   const toolCounts: Record<string, number> = {}
-  let inputTokens = 0
-  let outputTokens = 0
-  let cacheRead = 0
-  let cacheWrite = 0
   let firstPrompt = ''
   let hasTaskAgent = false
   let hasMcp = false
@@ -121,7 +136,10 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Pa
   let gitBranch: string | undefined
   let hasCompaction = false
   let hasThinking = false
-  const modelUsage: Record<string, ModelUsage> = {}
+  // Tokens, models and message counts are recorded per turn; the session's
+  // counters are derived from the ledger after the loop
+  const ledger = new LedgerBuilder()
+  const rateLimitHits: RateLimitHit[] = []
 
   try {
     // Stream line-by-line rather than buffering the whole file — session
@@ -151,12 +169,12 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Pa
           hasCompaction = true
         }
         if (obj.type === 'user') {
-          userCount++
           if (ts) {
             const d = new Date(ts)
             if (!isNaN(d.getTime())) {
               messageHours.push(d.getHours())
               userMessageTimestamps.push(ts)
+              ledger.addUser(d.getTime())
             }
           }
           const content = (obj as { message?: { content?: string | unknown[] } }).message?.content
@@ -169,33 +187,19 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Pa
           }
         }
         if (obj.type === 'assistant') {
-          assistantCount++
           const msg = (obj as { message?: { model?: string; usage?: Record<string, number>; content?: unknown[] } }).message
+          let turnInput = 0, turnOutput = 0, turnCacheRead = 0, turnCacheWrite = 0
+          let turnToolCalls = 0
+          const quota = (obj as { quotaLimits?: { status?: string; rateLimitType?: string; resetsAt?: number } }).quotaLimits
+          if (quota?.status === 'rejected' && quota.rateLimitType === 'five_hour' && typeof quota.resetsAt === 'number' && ts) {
+            const at = new Date(ts).getTime()
+            if (!isNaN(at)) rateLimitHits.push({ ts: at, resets_at: quota.resetsAt * 1000 })
+          }
           if (msg?.usage) {
-            const turnInput = msg.usage.input_tokens ?? 0
-            const turnOutput = msg.usage.output_tokens ?? 0
-            const turnCacheRead = msg.usage.cache_read_input_tokens ?? 0
-            const turnCacheWrite = msg.usage.cache_creation_input_tokens ?? 0
-            inputTokens += turnInput
-            outputTokens += turnOutput
-            cacheRead += turnCacheRead
-            cacheWrite += turnCacheWrite
-
-            if (msg.model) {
-              const existing = modelUsage[msg.model] ?? {
-                inputTokens: 0,
-                outputTokens: 0,
-                cacheReadInputTokens: 0,
-                cacheCreationInputTokens: 0,
-                costUSD: 0,
-                webSearchRequests: 0,
-              }
-              existing.inputTokens += turnInput
-              existing.outputTokens += turnOutput
-              existing.cacheReadInputTokens += turnCacheRead
-              existing.cacheCreationInputTokens += turnCacheWrite
-              modelUsage[msg.model] = existing
-            }
+            turnInput = msg.usage.input_tokens ?? 0
+            turnOutput = msg.usage.output_tokens ?? 0
+            turnCacheRead = msg.usage.cache_read_input_tokens ?? 0
+            turnCacheWrite = msg.usage.cache_creation_input_tokens ?? 0
           }
           const content = msg?.content
           if (Array.isArray(content)) {
@@ -203,6 +207,7 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Pa
               const item = c as { type?: string; name?: string }
               if (item.type === 'thinking') hasThinking = true
               if (item.type === 'tool_use' && item.name) {
+                turnToolCalls++
                 toolCounts[item.name] = (toolCounts[item.name] ?? 0) + 1
                 if (item.name.startsWith('Task') || item.name === 'TodoWrite' || item.name === 'Agent' || item.name === 'Workflow') hasTaskAgent = true
                 if (item.name.startsWith('mcp__')) hasMcp = true
@@ -210,6 +215,14 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Pa
                 if (item.name === 'WebFetch') hasWebFetch = true
               }
             }
+          }
+          if (ts) {
+            ledger.addTurn({
+              ts: new Date(ts).getTime(),
+              model: msg?.model ?? NO_MODEL,
+              input: turnInput, output: turnOutput, cacheRead: turnCacheRead, cacheWrite: turnCacheWrite,
+              toolCalls: turnToolCalls,
+            })
           }
         }
       } catch { /* skip malformed line */ }
@@ -223,23 +236,25 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Pa
   const start = new Date(startTime).getTime()
   const end = lastTime ? new Date(lastTime).getTime() : start
   const durationMinutes = (end - start) / 60_000
+  const turns = ledger.build()
+  const m = ledgerMetrics(turns, null, durationMinutes)
 
-  return {
+  const session: ParsedSession = {
     session_id: sessionId,
     project_path: cwd ?? '',
     start_time: startTime,
     last_activity: lastTime || startTime,
     duration_minutes: durationMinutes,
-    user_message_count: userCount,
-    assistant_message_count: assistantCount,
+    user_message_count: m.user_message_count,
+    assistant_message_count: m.assistant_message_count,
     tool_counts: toolCounts,
     languages: {},
     git_commits: 0,
     git_pushes: 0,
-    input_tokens: inputTokens,
-    output_tokens: outputTokens,
-    cache_creation_input_tokens: cacheWrite,
-    cache_read_input_tokens: cacheRead,
+    input_tokens: m.input_tokens,
+    output_tokens: m.output_tokens,
+    cache_creation_input_tokens: m.cache_creation_input_tokens,
+    cache_read_input_tokens: m.cache_read_input_tokens,
     first_prompt: firstPrompt,
     user_interruptions: 0,
     user_response_times: [],
@@ -254,7 +269,7 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Pa
     files_modified: 0,
     message_hours: messageHours,
     user_message_timestamps: userMessageTimestamps,
-    model_usage: modelUsage,
+    model_usage: m.model_usage,
     cwd,
     slug_name: slugName,
     ai_title: aiTitle,
@@ -263,41 +278,11 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Pa
     has_compaction: hasCompaction,
     has_thinking: hasThinking,
   }
+  return { session, ledger: turns, rate_limit_hits: rateLimitHits }
 }
 
 // ─── Sub-agent usage ─────────────────────────────────────────────────────────
 // Transcripts under <dir>/<session>/subagents/ are folded into the session's counters.
-
-function emptyModelUsage(): ModelUsage {
-  return {
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadInputTokens: 0,
-    cacheCreationInputTokens: 0,
-    costUSD: 0,
-    webSearchRequests: 0,
-  }
-}
-
-function addModelUsage(target: Record<string, ModelUsage>, model: string, usage: ModelUsage) {
-  const existing = target[model] ?? emptyModelUsage()
-  existing.inputTokens += usage.inputTokens
-  existing.outputTokens += usage.outputTokens
-  existing.cacheReadInputTokens += usage.cacheReadInputTokens
-  existing.cacheCreationInputTokens += usage.cacheCreationInputTokens
-  target[model] = existing
-}
-
-function toModelUsage(u: TurnUsage): ModelUsage {
-  return {
-    inputTokens: u.input_tokens,
-    outputTokens: u.output_tokens,
-    cacheReadInputTokens: u.cache_read_input_tokens,
-    cacheCreationInputTokens: u.cache_creation_input_tokens,
-    costUSD: 0,
-    webSearchRequests: 0,
-  }
-}
 
 function hasTokens(u: TurnUsage): boolean {
   return u.input_tokens + u.output_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens > 0
@@ -322,12 +307,13 @@ function dominantModel(modelUsage: Record<string, ModelUsage>): string | undefin
 /** An orchestrator quiet for this long is assumed to have no agent running, so its fold is served from foldedCache */
 const QUIET_SESSION_MS = 5 * 60 * 1000
 
-const foldedCache = new Map<string, { mtimeMs: number; promise: Promise<ParsedSession> }>()
+const foldedCache = new Map<string, { mtimeMs: number; promise: Promise<SessionRecord> }>()
 
-/** Fold every sub-agent transcript of a session into its counters; only called for sessions with a `<session>/` folder */
-async function withAgentUsage(session: ParsedSession, jsonlPath: string): Promise<ParsedSession> {
+/** Fold every sub-agent transcript of a session into its ledger, and re-derive the counters; only called for sessions with a `<session>/` folder */
+async function withAgentUsage(record: SessionRecord, jsonlPath: string): Promise<SessionRecord> {
+  const { session } = record
   const files = await listSubagentFiles(jsonlPath, session.session_id)
-  if (files.length === 0) return session
+  if (files.length === 0) return record
 
   const scans = await mapPool(files, 4, async (f) => {
     try {
@@ -337,70 +323,51 @@ async function withAgentUsage(session: ParsedSession, jsonlPath: string): Promis
     }
   })
 
-  // A model-less orchestrator only has top-level counters; bucket them like sessionCost() does
-  const modelUsage: Record<string, ModelUsage> = {}
-  if (session.model_usage && Object.keys(session.model_usage).length > 0) {
-    for (const [model, u] of Object.entries(session.model_usage)) addModelUsage(modelUsage, model, u)
-  } else {
-    addModelUsage(modelUsage, FALLBACK_MODEL, {
-      inputTokens: session.input_tokens,
-      outputTokens: session.output_tokens,
-      cacheReadInputTokens: session.cache_read_input_tokens ?? 0,
-      cacheCreationInputTokens: session.cache_creation_input_tokens ?? 0,
-      costUSD: 0,
-      webSearchRequests: 0,
-    })
-  }
-  const fallbackModel = dominantModel(modelUsage) ?? FALLBACK_MODEL
+  // A model-less orchestrator has nothing in model_usage; bucket its turns
+  // under the fallback model, like sessionCost() prices them
+  const orchestratorModeled = hasModeledTurns(record.ledger)
+  const ledger = LedgerBuilder.from(record.ledger, m => (m === NO_MODEL && !orchestratorModeled ? FALLBACK_MODEL : m))
+  const fallbackModel = (orchestratorModeled && dominantModel(session.model_usage ?? {})) || FALLBACK_MODEL
 
-  const agentModelUsage: Record<string, ModelUsage> = {}
   let agentCount = 0
   for (let i = 0; i < files.length; i++) {
     const scan = scans[i]
     if (!scan || scan.assistantCount === 0) continue
     agentCount++
-    for (const [model, u] of Object.entries(scan.usageByModel)) addModelUsage(agentModelUsage, model, toModelUsage(u))
-    if (hasTokens(scan.unattributedUsage)) {
-      const model = await resolveUnknownModel(files[i], fallbackModel)
-      addModelUsage(agentModelUsage, model, toModelUsage(scan.unattributedUsage))
-    }
+    // Model-less agent turns take the sidecar model (or the parent's)
+    const unknownModel = hasTokens(scan.unattributedUsage) ? await resolveUnknownModel(files[i], fallbackModel) : fallbackModel
+    ledger.appendAgent(scan.ledger, unknownModel)
   }
-  if (agentCount === 0) return session
+  if (agentCount === 0) return record
 
-  let inputTokens = 0
-  let outputTokens = 0
-  let cacheRead = 0
-  let cacheWrite = 0
-  for (const [model, u] of Object.entries(agentModelUsage)) {
-    addModelUsage(modelUsage, model, u)
-    inputTokens += u.inputTokens
-    outputTokens += u.outputTokens
-    cacheRead += u.cacheReadInputTokens
-    cacheWrite += u.cacheCreationInputTokens
-  }
-
+  const folded = ledger.build()
+  const m = ledgerMetrics(folded, null, session.duration_minutes)
   return {
-    ...session,
-    input_tokens: session.input_tokens + inputTokens,
-    output_tokens: session.output_tokens + outputTokens,
-    cache_read_input_tokens: (session.cache_read_input_tokens ?? 0) + cacheRead,
-    cache_creation_input_tokens: (session.cache_creation_input_tokens ?? 0) + cacheWrite,
-    model_usage: modelUsage,
-    agent_model_usage: agentModelUsage,
-    agent_count: agentCount,
-    uses_task_agent: true,
+    ...record,
+    ledger: folded,
+    session: {
+      ...session,
+      input_tokens: m.input_tokens,
+      output_tokens: m.output_tokens,
+      cache_read_input_tokens: m.cache_read_input_tokens,
+      cache_creation_input_tokens: m.cache_creation_input_tokens,
+      model_usage: m.model_usage,
+      agent_model_usage: m.agent_model_usage,
+      agent_count: agentCount,
+      uses_task_agent: true,
+    },
   }
 }
 
 /** withAgentUsage, served from foldedCache for sessions that have gone quiet */
-function foldAgentUsage(session: ParsedSession, jsonlPath: string, mtimeMs: number, now: number): Promise<ParsedSession> {
+function foldAgentUsage(record: SessionRecord, jsonlPath: string, mtimeMs: number, now: number): Promise<SessionRecord> {
   if (now - mtimeMs < QUIET_SESSION_MS) {
     foldedCache.delete(jsonlPath)
-    return withAgentUsage(session, jsonlPath)
+    return withAgentUsage(record, jsonlPath)
   }
   const cached = foldedCache.get(jsonlPath)
   if (cached && cached.mtimeMs === mtimeMs) return cached.promise
-  const promise = withAgentUsage(session, jsonlPath).catch(err => {
+  const promise = withAgentUsage(record, jsonlPath).catch(err => {
     foldedCache.delete(jsonlPath)
     throw err
   })
@@ -417,6 +384,11 @@ function foldAgentUsage(session: ParsedSession, jsonlPath: string, mtimeMs: numb
  * into each session's token counters, model_usage, agent_model_usage and agent_count.
  */
 export async function getAllParsedSessions(): Promise<ParsedSession[]> {
+  return (await getAllSessionRecords()).map(r => r.session)
+}
+
+/** getAllParsedSessions with each session's ledger and rate-limit hits, for the routes that slice or inspect them */
+export async function getAllSessionRecords(): Promise<SessionRecord[]> {
   let slugs: string[]
   try {
     slugs = await listProjectSlugs()
@@ -462,27 +434,27 @@ export async function getAllParsedSessions(): Promise<ParsedSession[]> {
   const parsed = await mapPool(fileEntries, 16, async (f) => {
     const cached = sessionCache.get(f.filePath)
     if (cached && cached.mtimeMs === f.mtimeMs) {
-      const session = await cached.promise
-      return { slug: f.slug, session: session && f.hasSessionDir ? await foldAgentUsage(session, f.filePath, f.mtimeMs, now) : session }
+      const record = await cached.promise
+      return { slug: f.slug, record: record && f.hasSessionDir ? await foldAgentUsage(record, f.filePath, f.mtimeMs, now) : record }
     }
     // Failed parses are evicted so a transient read error doesn't hide the
     // session until the file's mtime happens to change again.
-    const promise = parseSessionFile(f.filePath, f.sessionId).then(session => {
-      if (!session) sessionCache.delete(f.filePath)
-      return session
+    const promise = parseSessionFile(f.filePath, f.sessionId).then(record => {
+      if (!record) sessionCache.delete(f.filePath)
+      return record
     }, err => {
       sessionCache.delete(f.filePath)
       throw err
     })
     sessionCache.set(f.filePath, { mtimeMs: f.mtimeMs, promise })
-    const session = await promise
-    return { slug: f.slug, session: session && f.hasSessionDir ? await foldAgentUsage(session, f.filePath, f.mtimeMs, now) : session }
+    const record = await promise
+    return { slug: f.slug, record: record && f.hasSessionDir ? await foldAgentUsage(record, f.filePath, f.mtimeMs, now) : record }
   })
 
   // Build slug → cwd map from any session that captured one
   const slugCwd = new Map<string, string>()
-  for (const { slug, session } of parsed) {
-    if (session?.cwd && !slugCwd.has(slug)) slugCwd.set(slug, session.cwd)
+  for (const { slug, record } of parsed) {
+    if (record?.session.cwd && !slugCwd.has(slug)) slugCwd.set(slug, record.session.cwd)
   }
   // Keep the cross-call cache warm for resolveProjectPath callers, and evict
   // entries for slugs that vanished or whose scan yielded no cwd this pass.
@@ -492,16 +464,16 @@ export async function getAllParsedSessions(): Promise<ParsedSession[]> {
   }
   for (const [slug, cwd] of slugCwd) projectCwdCache.set(slug, cwd)
 
-  const results: ParsedSession[] = []
-  for (const { slug, session } of parsed) {
-    if (!session) continue
+  const results: SessionRecord[] = []
+  for (const { slug, record } of parsed) {
+    if (!record) continue
     results.push({
-      ...session,
-      project_path: slugCwd.get(slug) ?? slugToPath(slug),
+      ...record,
+      session: { ...record.session, project_path: slugCwd.get(slug) ?? slugToPath(slug) },
     })
   }
 
-  results.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
+  results.sort((a, b) => new Date(b.session.start_time).getTime() - new Date(a.session.start_time).getTime())
   return results
 }
 

@@ -64,7 +64,8 @@ function inputPricePerMTok(model: string): number {
 }
 
 const PREMIUM_INPUT_THRESHOLD = 5 // $/MTok — Opus 4.x and up
-const ECONOMY_MODEL = 'claude-sonnet-4-6'
+// Current Sonnet: the model /model would actually pick as the cheaper default
+const ECONOMY_MODEL = 'claude-sonnet-5'
 const TARGET_CACHE_HIT_RATE = 0.9
 
 // ─── Detectors ───────────────────────────────────────────────────────────────
