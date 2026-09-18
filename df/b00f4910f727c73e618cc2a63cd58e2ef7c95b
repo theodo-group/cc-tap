@@ -1,0 +1,23 @@
+app/api/sessions/route.ts
+  s_f66bcd7c75641e::t_5d84008bd4883d 4,6,41,45,52
+lib/session-ledger.ts
+  s_f66bcd7c75641e::t_5d84008bd4883d 1,251-267
+lib/__tests__/session-ledger.test.ts
+  s_f66bcd7c75641e::t_5d84008bd4883d 2,4,148-187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "dfb00f4910f727c73e618cc2a63cd58e2ef7c95b",
+  "prompts": {},
+  "sessions": {
+    "s_f66bcd7c75641e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "48ec2704-cbd7-4324-aaf1-25ad0d489200",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
