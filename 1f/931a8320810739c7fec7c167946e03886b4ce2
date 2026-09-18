@@ -1,0 +1,41 @@
+lib/session-ledger.ts
+  s_f66bcd7c75641e::t_b548db5fff235e 1-2,8-13,80-84,93,112-115,117,123-131,133,135-138,145-147,151-154,156,164,176-177,184,187,189,195,197-207,209-235,238-251,260
+app/api/usage-windows/route.ts
+  s_f66bcd7c75641e::t_4b1e6f90dc4338 2,16,19-20,23
+lib/__tests__/claude-reader.test.ts
+  s_f66bcd7c75641e::t_a3a99c53651e67 120-122
+  s_f66bcd7c75641e::t_a69764588b4dae 6,114-119,123-140
+  s_f66bcd7c75641e::t_d2941f4af3f22b 141-142
+types/claude.ts
+  s_f66bcd7c75641e::t_b00526a077fbdd 104-107,113,115,118,125-131
+  s_f66bcd7c75641e::t_5d47a17fdc4116 132-133
+lib/pricing.ts
+  s_f66bcd7c75641e::t_b00526a077fbdd 185-198,200-201,203-204,206-209,215-219,222
+  s_f66bcd7c75641e::t_83ed0f561c57b5 199,202
+components/sessions/session-table.tsx
+  s_f66bcd7c75641e::t_4b1e6f90dc4338 9-10,24-25,27-28,33-35,99-103,274,277,280,370-375,380-381,384,386-388,397-398,400,408
+docs/RANGE-FILTER-PLAN.md
+  s_f66bcd7c75641e::t_a69764588b4dae 60-69
+lib/claude-reader.ts
+  s_f66bcd7c75641e::t_1032afc924f408 19,56-65,70,121,139-140,239-240,242,248-249,254-257,272,281,310,312-314,316,326-330,337,341,343-344,346-358,363,366,370,387-391,437-438,442-444,450-451,456-457,467-469,471-472,476
+app/api/sessions/route.ts
+  s_f66bcd7c75641e::t_4b1e6f90dc4338 2,10,30,34,41-42,45
+lib/__tests__/session-ledger.test.ts
+  s_f66bcd7c75641e::t_4b1e6f90dc4338 2-3,27,38,55,113-119,123-148,150,152-154,158,161-168,182,184,207
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1f931a8320810739c7fec7c167946e03886b4ce2",
+  "prompts": {},
+  "sessions": {
+    "s_f66bcd7c75641e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "48ec2704-cbd7-4324-aaf1-25ad0d489200",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
