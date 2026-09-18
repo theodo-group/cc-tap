@@ -1,0 +1,30 @@
+docs/RANGE-FILTER-PLAN.md
+  s_89f47365505541::t_d59ecf24eb583a 1-2,5-59,70-140,142-185
+  s_89f47365505541::t_27bdaa88eafed0 141
+  s_f66bcd7c75641e::t_a69764588b4dae 60-69
+  s_89f47365505541::t_9a92c96a31acde 3-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0abefc8d4b2b55c0bf3a2ceaf88b5948e6a31c4c",
+  "prompts": {},
+  "sessions": {
+    "s_89f47365505541": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3715f3f7-c827-49dd-93e3-13f9c15a3258",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    },
+    "s_f66bcd7c75641e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "48ec2704-cbd7-4324-aaf1-25ad0d489200",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
