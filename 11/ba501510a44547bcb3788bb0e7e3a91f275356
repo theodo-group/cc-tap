@@ -1,0 +1,32 @@
+components/sessions/range-filter.tsx
+  s_f8a9bc8089c349::t_c8c348dba76a1e 30-31,33
+lib/claude-reader.ts
+  s_f8a9bc8089c349::t_c8c348dba76a1e 19,58-59,300
+lib/__tests__/time-window.test.ts
+  s_f8a9bc8089c349::t_462af48c2b0b73 1-31
+lib/time-window.ts
+  s_f8a9bc8089c349::t_c8c348dba76a1e 26-32,35-36
+app/api/sessions/route.ts
+  s_f8a9bc8089c349::t_c8c348dba76a1e 10-11,14
+lib/session-ledger.ts
+  s_f8a9bc8089c349::t_c8c348dba76a1e 36-43
+lib/__tests__/session-ledger.test.ts
+  s_f8a9bc8089c349::t_e423bd6b2f6490 2
+  s_f8a9bc8089c349::t_462af48c2b0b73 137-147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "11ba501510a44547bcb3788bb0e7e3a91f275356",
+  "prompts": {},
+  "sessions": {
+    "s_f8a9bc8089c349": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e94dea7-6635-44e4-8bba-bf251e0e4d56",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
