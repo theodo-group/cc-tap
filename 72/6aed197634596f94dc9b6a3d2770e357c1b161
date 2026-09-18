@@ -1,0 +1,77 @@
+lib/transcript-scan.ts
+  s_0146c1be56d467::t_d83b6f1828a0a5 5,56-57,153,163,213,216,246-255,258
+lib/session-ledger.ts
+  s_f66bcd7c75641e::t_b548db5fff235e 1-2,8-13,80-84,93,112-115,117,123-131,133,135-138,145-147,151-154,156,164,176-177,184,187,189,195,197-207,209-235,238-251,260
+  s_f66bcd7c75641e::t_5d84008bd4883d 237,252-259,261-264
+  s_6bfabb491a21fd::t_c4f2931989c00c 208,236
+  s_89f47365505541::t_d4e03841c13db9 3-7,14-30,33-79,85-92,94-111,116,118-122,132,134,139-144,148-150,155,157-163,165-175,178-183,185-186,188,190-194,196
+  s_f8a9bc8089c349::t_c8c348dba76a1e 31-32
+lib/__tests__/session-ledger.test.ts
+  s_89f47365505541::t_05958534295dff 1,5-26,28-37,39-54,56-112,120-122,149,151,155-157
+  s_f66bcd7c75641e::t_4b1e6f90dc4338 2-3,27,38,55,113-119,123-148,150,152-154,158,161-168,182,184,207
+  s_6bfabb491a21fd::t_c4f2931989c00c 159-160,169-170
+  s_f66bcd7c75641e::t_5d84008bd4883d 4,171-181,183,185-206,208-210
+lib/claude-reader.ts
+  s_89f47365505541::t_03795eb263e5e3 38-47,141-142,177,191-197,199-202,210,219-226
+  s_f66bcd7c75641e::t_1032afc924f408 19,58-67,70,121,139-140,239-240,242,248-249,254-257,272,281,310,312-314,316,326-330,337,341,343-344,346-358,363,366,370,387-391,437-438,442-444,450-451,456-457,467-469,471-472,476
+  s_0146c1be56d467::t_d83b6f1828a0a5 338-339
+lib/__tests__/claude-reader.test.ts
+  s_f66bcd7c75641e::t_a69764588b4dae 6,114-119,123-140
+  s_f66bcd7c75641e::t_a3a99c53651e67 120-122
+  s_6bfabb491a21fd::t_46f64d23819c44 141-142
+types/claude.ts
+  s_f66bcd7c75641e::t_b00526a077fbdd 104-107,113,115,118,125-131
+  s_89f47365505541::t_3677f40d094b96 108-112,114,116-117,119-124,145-151
+  s_f66bcd7c75641e::t_5d47a17fdc4116 132-133
+  s_6bfabb491a21fd::t_e80d679c04e672 152-153
+lib/pricing.ts
+  s_6bfabb491a21fd::t_78f5b9f8ef874e 185-204,206-209,215-219,222
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "726aed197634596f94dc9b6a3d2770e357c1b161",
+  "prompts": {},
+  "sessions": {
+    "s_0146c1be56d467": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3515f8f1-ab53-44f5-885f-28f33fb9a4ff",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    },
+    "s_6bfabb491a21fd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c28e4edd-5969-4bdd-8a93-9c8610d607eb",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    },
+    "s_89f47365505541": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3715f3f7-c827-49dd-93e3-13f9c15a3258",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    },
+    "s_f66bcd7c75641e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "48ec2704-cbd7-4324-aaf1-25ad0d489200",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    },
+    "s_f8a9bc8089c349": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e94dea7-6635-44e4-8bba-bf251e0e4d56",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
