@@ -6,14 +6,15 @@
  * including the revalidation a page makes when it comes back into focus.
  *
  * A log only ever grows, so its size and mtime name a version exactly. That
- * version is the entry key and the ETag alike: a reader whose copy is current
- * gets 304 and no body, and a reader whose copy is stale gets bytes that were
- * serialized and compressed once, whoever asks for them.
+ * version, with the version of cc-tap that parsed it, is the entry key and the
+ * ETag alike: a reader whose copy is current gets 304 and no body, and a reader
+ * whose copy is stale gets bytes that were serialized and compressed once,
+ * whoever asks for them.
  */
 import { stat } from 'fs/promises'
 import { gzipSync } from 'zlib'
 import { parseSessionReplay } from '@/lib/replay-parser'
-import type { ReplayData } from '@/types/claude'
+import pkg from '../package.json'
 
 /** Sessions held at once. A long one costs 12 MB parsed plus its bytes; three
  *  covers a reader moving between a session, its agents and back. */
@@ -22,7 +23,7 @@ const MAX_SESSIONS = 3
 export interface CachedReplay {
   /** the version of the log these bytes were made from */
   etag: string
-  replay: ReplayData
+  /** the replay, serialized: only the bytes are served, so only they are held */
   json: Buffer
   /** made on first use: a reader that takes gzip pays for it once per version */
   gzip?: Buffer
@@ -30,10 +31,16 @@ export interface CachedReplay {
 
 const cache = new Map<string, CachedReplay>()
 
-/** The version of a log: it only grows, so its size and mtime name it exactly */
+/**
+ * The version of a replay: the log only grows, so its size and mtime name the
+ * input exactly, and the package version names the code that turns it into
+ * JSON. The browser keeps a copy across server restarts and upgrades, so
+ * without the latter a finished session would answer 304 to a newer cc-tap
+ * and hand it the shape, and the prices, of the old one.
+ */
 export async function replayEtag(jsonlPath: string): Promise<string> {
   const { size, mtimeMs } = await stat(jsonlPath)
-  return `"${size.toString(36)}-${Math.trunc(mtimeMs).toString(36)}"`
+  return `"${pkg.version}-${size.toString(36)}-${Math.trunc(mtimeMs).toString(36)}"`
 }
 
 /** The parsed replay of `jsonlPath`, parsed only when its version changed */
@@ -48,7 +55,7 @@ export async function cachedReplay(jsonlPath: string, sessionId: string): Promis
   }
 
   const replay = await parseSessionReplay(jsonlPath, sessionId)
-  const entry: CachedReplay = { etag, replay, json: Buffer.from(JSON.stringify(replay)) }
+  const entry: CachedReplay = { etag, json: Buffer.from(JSON.stringify(replay)) }
   cache.set(sessionId, entry)
   while (cache.size > MAX_SESSIONS) {
     const oldest = cache.keys().next().value

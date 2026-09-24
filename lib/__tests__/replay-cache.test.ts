@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, utimesSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
 import { cachedReplay, clearReplayCache, gzipOf, replayCacheState, replayEtag } from '@/lib/replay-cache'
+import pkg from '../../package.json'
 
 let dir: string
 
@@ -35,6 +36,11 @@ describe('replayEtag', () => {
     utimesSync(file, later, later)
     expect(await replayEtag(file)).not.toBe(first)
   })
+
+  it('names the version of cc-tap too, so an upgrade never answers 304 to an old copy', async () => {
+    const file = writeLog('a', ['one'])
+    expect(await replayEtag(file)).toContain(`"${pkg.version}-`)
+  })
 })
 
 describe('cachedReplay', () => {
@@ -42,8 +48,7 @@ describe('cachedReplay', () => {
     const file = writeLog('a', ['hello'])
     const first = await cachedReplay(file, 'a')
     const second = await cachedReplay(file, 'a')
-    expect(second.replay).toBe(first.replay)      // the same object, not a new parse
-    expect(second.json).toBe(first.json)
+    expect(second.json).toBe(first.json)          // the same bytes, not a new parse
   })
 
   it('parses again once the log grows, and says so in the etag', async () => {
@@ -54,8 +59,8 @@ describe('cachedReplay', () => {
     utimesSync(file, later, later)
     const second = await cachedReplay(file, 'a')
     expect(second.etag).not.toBe(first.etag)
-    expect(second.replay).not.toBe(first.replay)
-    expect(second.replay.turns).toHaveLength(2)
+    expect(second.json).not.toBe(first.json)
+    expect(JSON.parse(second.json.toString()).turns).toHaveLength(2)
   })
 
   it('holds a few sessions and drops the ones left alone longest', async () => {
