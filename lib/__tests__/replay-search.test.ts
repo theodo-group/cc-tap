@@ -1,35 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { searchTerms, fuzzyFind, searchIndex, buildReplayIndex, narrowsFrom, matchTurnParts, turnSearchText } from '@/lib/replay-search'
+import { searchIndex, buildReplayIndex, narrowsFrom, matchTurnParts, turnSearchText } from '@/lib/replay-search'
+import { searchTerms } from '@/lib/search-query'
 import type { ReplayTurn } from '@/types/claude'
 
 const turn = (p: Partial<ReplayTurn>): ReplayTurn => ({
   uuid: 'u', parentUuid: null, type: 'assistant', timestamp: '2026-01-01T00:00:00Z', text: '', ...p,
 } as ReplayTurn)
-
-describe('searchTerms', () => {
-  it('splits words and keeps a quoted phrase whole', () => {
-    expect(searchTerms('no "such file" here')).toEqual(['no', 'such file', 'here'])
-  })
-  it('is empty for a blank query', () => {
-    expect(searchTerms('   ')).toEqual([])
-  })
-})
-
-describe('fuzzyFind', () => {
-  it('finds an exact run at no cost', () => {
-    expect(fuzzyFind('parse the replay', 'replay')).toEqual({ start: 10, cost: 0 })
-  })
-  it('finds characters in order and charges the gaps', () => {
-    expect(fuzzyFind('the rebase step', 'rbase')).toEqual({ start: 4, cost: 1 })
-  })
-  it('refuses a run that skips too much: a short term is otherwise in any long text', () => {
-    expect(fuzzyFind('replay parser', 'rpars')).toBeNull()
-    expect(fuzzyFind('run every branch and see the result', 'rebase')).toBeNull()
-  })
-  it('returns null when a character is missing', () => {
-    expect(fuzzyFind('replay', 'xyz')).toBeNull()
-  })
-})
 
 describe('turnSearchText', () => {
   it('covers text, thinking, tool input and tool result', () => {

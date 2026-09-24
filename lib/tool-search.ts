@@ -1,6 +1,7 @@
 import path from 'path'
 import { readdir, readFile } from 'fs/promises'
 import { readJSONLLines } from '@/lib/claude-reader'
+import { findTerm, foldText, inputText, matchesAll, searchTerms } from '@/lib/search-query'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyLine = Record<string, any>
@@ -36,58 +37,21 @@ export interface ToolSearchResult {
 export const MAX_MATCHES = 5000
 const SNIPPET_LEN = 160
 
-/**
- * Split a query into lowercase terms; every term must appear in the text.
- * A quoted part, "pnpm ci-verify", is one term that must appear as that exact
- * phrase (inner whitespace normalized to single spaces). Unquoted words are
- * separate terms that may appear anywhere, in any order.
- */
-export function queryWords(query: string): string[] {
-  const terms: string[] = []
-  const re = /"([^"]*)"|(\S+)/g
-  for (const m of query.toLowerCase().matchAll(re)) {
-    const term = (m[1] ?? m[2]).replace(/\s+/g, ' ').trim()
-    if (term) terms.push(term)
-  }
-  return terms
-}
-
-export function matchesAll(text: string, words: string[]): boolean {
-  if (words.length === 0) return false
-  const lower = text.toLowerCase()
-  // Phrases may span a line break or several spaces in the source text
-  const flat = words.some(w => w.includes(' ')) ? lower.replace(/\s+/g, ' ') : lower
-  return words.every(w => (w.includes(' ') ? flat : lower).includes(w))
-}
-
-/** Concatenate the string values of a tool input, so JSON keys never match */
-export function inputText(input: unknown): string {
-  const out: string[] = []
-  const walk = (v: unknown) => {
-    if (v == null) return
-    if (typeof v === 'string') out.push(v)
-    else if (typeof v === 'number' || typeof v === 'boolean') out.push(String(v))
-    else if (Array.isArray(v)) v.forEach(walk)
-    else if (typeof v === 'object') Object.values(v as Record<string, unknown>).forEach(walk)
-  }
-  walk(input)
-  return out.join('\n')
-}
-
 export function resultText(content: unknown): string {
   if (typeof content === 'string') return content
   if (Array.isArray(content)) return content.map((c: AnyLine) => (typeof c === 'string' ? c : c?.text ?? '')).join('\n')
   return ''
 }
 
-/** A short excerpt around the first word that matches, collapsed to one line */
-export function makeSnippet(text: string, words: string[], len = SNIPPET_LEN): string {
-  const flat = text.replace(/\s+/g, ' ').trim()
-  const lower = flat.toLowerCase()
+/** A short excerpt around the first term that matches, collapsed to one line.
+ *  A term matched loosely is placed where its run starts. */
+export function makeSnippet(text: string, terms: readonly string[], len = SNIPPET_LEN): string {
+  const flat = foldText(text, { caseSensitive: true }).trim()
+  const hay = flat.toLowerCase()
   let pos = -1
-  for (const w of words) {
-    const i = lower.indexOf(w)
-    if (i >= 0 && (pos < 0 || i < pos)) pos = i
+  for (const term of terms) {
+    const found = findTerm(hay, term)
+    if (found && (pos < 0 || found.start < pos)) pos = found.start
   }
   if (flat.length <= len) return flat
   const start = Math.max(0, Math.min(pos < 0 ? 0 : pos - Math.floor(len / 3), flat.length - len))
@@ -133,8 +97,10 @@ async function readLines(filePath: string): Promise<AnyLine[]> {
 
 /**
  * Search every tool call of a session (orchestrator plus sub-agents) for a
- * query. All words must appear, case-insensitively, in the tool name and its
- * input; with scope `all`, the tool result text is searched too.
+ * query, read as the Replay find bar reads one out of exact mode: every term
+ * must appear, case-insensitively, a quoted part as that phrase, a lone word
+ * loosely when it has no literal match. The tool name and its input are
+ * searched; with scope `all`, the tool result text is too.
  */
 export async function searchToolCalls(
   jsonlPath: string,
@@ -142,7 +108,7 @@ export async function searchToolCalls(
   query: string,
   scope: SearchScope = 'input',
 ): Promise<ToolSearchResult> {
-  const words = queryWords(query)
+  const words = searchTerms(query)
   const withResults = scope === 'all'
   const matches: ToolMatch[] = []
   let total = 0

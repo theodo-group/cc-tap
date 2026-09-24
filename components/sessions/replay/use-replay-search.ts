@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  buildReplayIndex, matchTurnParts, searchIndex, searchTerms,
-  type ReplayHit, type SearchOptions, type TurnMatch,
+  buildReplayIndex, matchTurnParts, searchIndex,
+  type ReplayHit, type TurnMatch,
 } from '@/lib/replay-search'
+import { searchTerms, type SearchOptions } from '@/lib/search-query'
 import {
   clearHighlights, paintHighlights, scrollRangeIntoView, termRanges,
   type HighlightNames,

@@ -12,90 +12,21 @@
  * Five times that size — 38 M characters — is where the scan reaches a frame
  * (9-19 ms). Past it, the next step is a worker, so typing stays smooth; a
  * server-side index only pays once the page stops loading whole replays.
+ *
+ * How a query is read, and how a term is matched, is not decided here: it is
+ * the grammar of `lib/search-query.ts`, shared with the tool filter of the
+ * Agents tab, so the same query names the same things on the whole page.
  */
 import type { ReplayTurn } from '@/types/claude'
+import { findTerm, fold, foldText, inputText, matchesAny, searchTerms, type SearchOptions } from '@/lib/search-query'
+
+export type { SearchOptions } from '@/lib/search-query'
 
 /** One turn of the replay that matches the query */
 export interface ReplayHit {
   /** position of the turn in the full turn list */
   index: number
   uuid: string
-}
-
-/** Beyond this, a term is only looked for as a substring: fuzzy scans get too slow */
-const FUZZY_MAX_TEXT = 200_000
-
-/** How a query is read */
-export interface SearchOptions {
-  /** match the case of the query */
-  caseSensitive?: boolean
-  /** take the query as one piece of text, as quoting it does: no split into
-   *  words, no loose match — only what was typed, exactly */
-  exact?: boolean
-}
-
-/**
- * Split a query into terms, lowercased unless the search is case-sensitive. A
- * quoted part, "no such file", is one term that must appear as that phrase;
- * unquoted words are separate terms that may appear anywhere, in any order.
- * Every term must match. In exact mode the whole query is the one term.
- */
-export function searchTerms(query: string, { caseSensitive = false, exact = false }: SearchOptions = {}): string[] {
-  const cased = caseSensitive ? query : query.toLowerCase()
-  if (exact) {
-    const term = cased.replace(/\s+/g, ' ').trim()
-    return term ? [term] : []
-  }
-  const terms: string[] = []
-  for (const m of cased.matchAll(/"([^"]*)"|(\S+)/g)) {
-    const term = (m[1] ?? m[2]).replace(/\s+/g, ' ').trim()
-    if (term) terms.push(term)
-  }
-  return terms
-}
-
-/**
- * How many characters a fuzzy match may skip: enough for a typo or two, and
- * small enough that the term stays one word. Without this bound the letters of
- * a short term are found in order in almost any long text.
- */
-export function maxGap(term: string): number {
-  return Math.min(6, Math.max(2, Math.ceil(term.length / 2)))
-}
-
-/**
- * Position of `term` in `text` as a fuzzy (subsequence) match: the characters
- * of the term appear in order, with at most `maxGap(term)` characters skipped
- * in between. Returns the start of the tightest run found, and its cost — the
- * number of skipped characters. Returns null when there is no such run.
- */
-export function fuzzyFind(text: string, term: string): { start: number; cost: number } | null {
-  const gap = maxGap(term)
-  let best: { start: number; cost: number } | null = null
-  // Every occurrence of the first character is a candidate start
-  for (let s = text.indexOf(term[0]); s >= 0; s = text.indexOf(term[0], s + 1)) {
-    let i = s + 1
-    let ok = true
-    for (let k = 1; k < term.length; k++) {
-      const at = text.indexOf(term[k], i)
-      if (at < 0) { ok = false; break }
-      i = at + 1
-    }
-    if (!ok) break   // a later start cannot do better than a failed one
-    const cost = (i - s) - term.length
-    if (cost <= gap && (!best || cost < best.cost)) best = { start: s, cost }
-    if (cost === 0) break
-  }
-  return best
-}
-
-/** Cost of one term against a text, and where it matched. null when it is absent. */
-function findTerm(text: string, term: string, exact: boolean): { start: number; cost: number } | null {
-  const at = text.indexOf(term)
-  if (at >= 0) return { start: at, cost: 0 }
-  // A phrase or a long text is matched literally only; subsequences would be noise
-  if (exact || term.includes(' ') || text.length > FUZZY_MAX_TEXT) return null
-  return fuzzyFind(text, term)
 }
 
 /** Everything a reader sees in a turn: its text, its thinking, its tool calls and their results */
@@ -113,20 +44,6 @@ export function turnSearchText(
   }
   for (const r of turn.tool_results ?? []) parts.push(r.content)
   return parts.filter(Boolean).join('\n')
-}
-
-/** String values of a tool input, so JSON keys never match */
-function inputText(input: unknown): string {
-  const out: string[] = []
-  const walk = (v: unknown) => {
-    if (v == null) return
-    if (typeof v === 'string') out.push(v)
-    else if (typeof v === 'number' || typeof v === 'boolean') out.push(String(v))
-    else if (Array.isArray(v)) v.forEach(walk)
-    else if (typeof v === 'object') Object.values(v as Record<string, unknown>).forEach(walk)
-  }
-  walk(input)
-  return out.join('\n')
 }
 
 /**
@@ -154,11 +71,6 @@ export interface ReplayIndex {
   last?: PreviousSearch
 }
 
-/** Whitespace runs to a single space: the shape every search matches against */
-function fold(text: string): string {
-  return text.replace(/\s+/g, ' ')
-}
-
 /**
  * Fold a session once, at load. The folding is the expensive part — a regex
  * pass costs about 25 ms per 4 MB, against 0.08 ms for a search over the same
@@ -173,7 +85,7 @@ export function buildReplayIndex(
   const refold = () => turns.map(t => fold(turnSearchText(t, toolResults)))
   return {
     uuids: turns.map(t => t.uuid),
-    lowered: refold().map(t => t.toLowerCase()),
+    lowered: turns.map(t => foldText(turnSearchText(t, toolResults))),
     refold,
   }
 }
@@ -252,13 +164,10 @@ export interface TurnMatch {
   results: Set<string>
 }
 
-/** True when a term is in the text. The text is folded here too, so a part
+/** True when a term is in the text. The text is folded there too, so a part
  *  holding a hit is found whatever its line breaks. */
-function holds(text: string | undefined, terms: readonly string[], caseSensitive: boolean, exact: boolean): boolean {
-  if (!text) return false
-  const folded = fold(text)
-  const hay = caseSensitive ? folded : folded.toLowerCase()
-  return terms.some(term => findTerm(hay, term, exact) !== null)
+function holds(text: string | undefined, terms: readonly string[], options: SearchOptions): boolean {
+  return !!text && matchesAny(text, terms, options)
 }
 
 /**
@@ -272,18 +181,17 @@ export function matchTurnParts(
   options: SearchOptions = {},
 ): TurnMatch {
   const terms = searchTerms(query, options)
-  const { caseSensitive = false, exact = false } = options
   const match: TurnMatch = { text: false, thinking: false, inputs: new Set(), results: new Set() }
   if (terms.length === 0) return match
-  match.text = holds(turn.text, terms, caseSensitive, exact)
-  match.thinking = holds(turn.thinking_text, terms, caseSensitive, exact)
+  match.text = holds(turn.text, terms, options)
+  match.thinking = holds(turn.thinking_text, terms, options)
   for (const call of turn.tool_calls ?? []) {
-    if (holds(`${call.name}\n${inputText(call.input)}`, terms, caseSensitive, exact)) match.inputs.add(call.id)
+    if (holds(`${call.name}\n${inputText(call.input)}`, terms, options)) match.inputs.add(call.id)
     const res = toolResults?.get(call.id)
-    if (res && holds(res.content, terms, caseSensitive, exact)) match.results.add(call.id)
+    if (res && holds(res.content, terms, options)) match.results.add(call.id)
   }
   for (const r of turn.tool_results ?? []) {
-    if (holds(r.content, terms, caseSensitive, exact)) match.results.add(r.tool_use_id)
+    if (holds(r.content, terms, options)) match.results.add(r.tool_use_id)
   }
   return match
 }

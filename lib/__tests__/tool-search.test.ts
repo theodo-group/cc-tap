@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { mkdtemp, mkdir, writeFile, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import path from 'path'
-import { searchToolCalls, queryWords, matchesAll, inputText, makeSnippet } from '@/lib/tool-search'
+import { searchToolCalls, makeSnippet } from '@/lib/tool-search'
+import { searchTerms, matchesAll, inputText } from '@/lib/search-query'
 
 const SESSION = 'sess-search'
 let dir: string
@@ -36,21 +37,21 @@ afterAll(async () => { await rm(dir, { recursive: true, force: true }) })
 
 describe('helpers', () => {
   it('splits words and requires all of them, case-insensitively, in any order', () => {
-    expect(queryWords('  Pnpm   ci-verify ')).toEqual(['pnpm', 'ci-verify'])
+    expect(searchTerms('  Pnpm   ci-verify ')).toEqual(['pnpm', 'ci-verify'])
     expect(matchesAll('run CI-Verify with pnpm', ['pnpm', 'ci-verify'])).toBe(true)
     expect(matchesAll('pnpm test', ['pnpm', 'ci-verify'])).toBe(false)
     expect(matchesAll('anything', [])).toBe(false)
   })
   it('treats a quoted part as one exact phrase', () => {
-    expect(queryWords('"pnpm ci-verify" backend')).toEqual(['pnpm ci-verify', 'backend'])
-    expect(queryWords('"  pnpm   ci-verify "')).toEqual(['pnpm ci-verify'])
-    expect(queryWords('"unclosed')).toEqual(['"unclosed'])
-    const phrase = queryWords('"pnpm ci-verify"')
+    expect(searchTerms('"pnpm ci-verify" backend')).toEqual(['pnpm ci-verify', 'backend'])
+    expect(searchTerms('"  pnpm   ci-verify "')).toEqual(['pnpm ci-verify'])
+    expect(searchTerms('"unclosed')).toEqual(['"unclosed'])
+    const phrase = searchTerms('"pnpm ci-verify"')
     expect(matchesAll('cd x && pnpm ci-verify', phrase)).toBe(true)
     expect(matchesAll('cd x && pnpm\n  ci-verify', phrase)).toBe(true) // line break inside the phrase
     expect(matchesAll('pnpm run ci-verify', phrase)).toBe(false)
     expect(matchesAll('pnpm install && make ci-verify', phrase)).toBe(false)
-    expect(matchesAll('pnpm install && make ci-verify', queryWords('pnpm ci-verify'))).toBe(true)
+    expect(matchesAll('pnpm install && make ci-verify', searchTerms('pnpm ci-verify'))).toBe(true)
   })
   it('searches input values but not JSON keys', () => {
     expect(inputText({ command: 'ls', nested: { flags: ['-a', 2] } })).toBe('ls\n-a\n2')
