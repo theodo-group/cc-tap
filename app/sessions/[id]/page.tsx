@@ -8,7 +8,9 @@ import { SessionSidebar } from '@/components/sessions/replay/session-sidebar'
 import { TurnList } from '@/components/sessions/replay/turn-list'
 import { SessionBadges } from '@/components/sessions/session-badges'
 import { formatCost, formatTokens, formatDuration, projectDisplayName } from '@/lib/decode'
-import type { AgentRun, AgentTimeline, ReplayData, SessionWithFacet } from '@/types/claude'
+import { agentsCost as priceAgents } from '@/lib/pricing'
+import { groupByRun, sortWorkflowAgents } from '@/lib/workflow-agents'
+import type { AgentRun, AgentTimeline, ReplayData, SessionWithFacet, WorkflowRun } from '@/types/claude'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -17,6 +19,7 @@ import { RawApiTab } from '@/components/sessions/raw-api/raw-api-tab'
 import { AgentTimelineTab } from '@/components/sessions/agents/agent-timeline-tab'
 import { AgentDetailsSheet } from '@/components/sessions/agents/agent-details-sheet'
 import { OrchestratorSheet } from '@/components/sessions/agents/orchestrator-sheet'
+import { WorkflowDetailsSheet } from '@/components/sessions/agents/workflow-details-sheet'
 import { ContextTab } from '@/components/sessions/context/context-tab'
 import { TimeWindowBar } from '@/components/sessions/time-window-bar'
 import { inWindow, intersectsWindow, windowFromSearch, windowToSearch, type TimeWindow } from '@/lib/time-window'
@@ -44,7 +47,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
 
   const { data: timeline } = useSWR<AgentTimeline>(`/api/sessions/${id}/agents`, fetcher, {
     // Keep polling while an agent is still running
-    refreshInterval: latest => (latest?.agents.some(a => a.outcome === 'running') ? 10_000 : 0),
+    refreshInterval: latest => (latest?.agents.some(a => a.outcome === 'running') || latest?.workflows?.some(w => w.status === 'running') ? 10_000 : 0),
   })
   // ─── Selected time window, kept in the URL (?from=&to=) so it can be shared
   const [win, setWin] = useState<TimeWindow | null>(null)
@@ -57,7 +60,11 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
     window.history.replaceState(null, '', url)
   }, [])
 
-  const agentCount = timeline?.agents.filter(a => !a.parent_id && intersectsWindow(a.start, a.end, win)).length ?? 0
+  // Top-level agents plus workflow runs; a run counts once, not once per agent
+  const agentCount = timeline
+    ? timeline.agents.filter(a => !a.parent_id && !a.workflow_id && intersectsWindow(a.start, a.end, win)).length
+      + (timeline.workflows ?? []).filter(w => intersectsWindow(w.start, w.end, win)).length
+    : 0
 
   const view = useMemo<ReplayData | null>(() => {
     if (!replayData) return null
@@ -76,17 +83,34 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
     return { ...replayData, turns, compactions, total_cost }
   }, [replayData, win])
 
+  // Whole-session cost includes sub-agent transcripts (from /api/sessions/[id]);
+  // the replay's per-turn sum is orchestrator-only and is used for a time window.
+  const sessionTotalCost = meta?.estimated_cost ?? replayData?.total_cost ?? 0
+  // Memoised for the React Compiler: a bare call on `meta` reads as a possible
+  // mutation, and the drawer callbacks below then lose their manual memoization
+  const agentsCost = useMemo(() => (meta ? priceAgents(meta) : 0), [meta])
+  const sessionAgentCount = meta?.agent_count ?? 0
+  const headerCost = win ? (view?.total_cost ?? 0) : sessionTotalCost
+
   const [tab, setTab] = useState('replay')
 
-  // ─── One pair of drawers for the whole page, opened from the Agents tab and from the Context tab
+  // ─── One set of drawers for the whole page, opened from the Agents tab and from the Context tab
   const [selectedAgent, setSelectedAgent] = useState<AgentRun | null>(null)
+  const [selectedRun, setSelectedRun] = useState<WorkflowRun | null>(null)
   /** Time under the pointer when the agent was picked; the drawer scrolls its transcript there */
   const [selectedAt, setSelectedAt] = useState<number | undefined>(undefined)
   /** Time picked on the orchestrator; opens the orchestrator drawer */
   const [orchestratorAt, setOrchestratorAt] = useState<number | null>(null)
-  const onSelectAgent = useCallback((a: AgentRun, atMs?: number) => { setSelectedAt(atMs); setSelectedAgent(a) }, [])
+  // An agent drawer and a run drawer never show at once: opening one closes the other
+  const onSelectAgent = useCallback((a: AgentRun, atMs?: number) => { setSelectedRun(null); setSelectedAt(atMs); setSelectedAgent(a) }, [])
+  const onSelectWorkflow = useCallback((w: WorkflowRun) => { setSelectedAgent(null); setSelectedRun(w) }, [])
   const onOpenOrchestratorAt = useCallback((atMs: number) => setOrchestratorAt(atMs), [])
   const agentsById = useMemo(() => new Map((timeline?.agents ?? []).map(a => [a.id, a])), [timeline])
+  const runById = useMemo(() => new Map((timeline?.workflows ?? []).map(w => [w.id, w])), [timeline])
+  const runAgents = useMemo(() => {
+    const grouped = groupByRun(timeline?.agents ?? [])
+    return new Map([...grouped].map(([id, list]) => [id, sortWorkflowAgents(list)]))
+  }, [timeline])
   // ─── The turn list is virtualised, so a jump costs the same wherever it lands.
   /** A jump asked for by hand; its token makes the same turn ask again */
   const [jump, setJump] = useState<{ index: number; token: number } | null>(null)
@@ -184,7 +208,11 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
       totalCacheRead  += t.usage.cache_read_input_tokens ?? 0
     }
   }
-  const totalTokens = totalInput + totalOutput + totalCacheWrite + totalCacheRead
+  // Whole-session tokens include sub-agent transcripts, matching the Cost card;
+  // a time window falls back to the orchestrator turns it contains
+  const totalTokens = !win && meta
+    ? meta.input_tokens + meta.output_tokens + (meta.cache_creation_input_tokens ?? 0) + (meta.cache_read_input_tokens ?? 0)
+    : totalInput + totalOutput + totalCacheWrite + totalCacheRead
   const discardedTurns = replay.turns.filter(t => t.type === 'assistant' && t.discarded).length
   const durationMinutes = win ? (win.to - win.from) / 60_000 : (meta?.duration_minutes ?? 0)
 
@@ -197,7 +225,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
       {/* Header */}
       <TopBar
         title={replay.ai_title ?? `${projectName} · ${replay.slug ?? id.slice(0, 8)}`}
-        subtitle={`${projectName} · ${replay.git_branch ?? '?'} · v${replay.version ?? '?'} · ${formatCost(replayData.total_cost ?? 0)}`}
+        subtitle={`${projectName} · ${replay.git_branch ?? '?'} · v${replay.version ?? '?'} · ${formatCost(sessionTotalCost)}`}
       />
 
       {/* Stats cards — match project detail page */}
@@ -242,7 +270,9 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
               <CardTitle className="text-3xl font-bold tabular-nums text-blue-700 dark:text-[#60a5fa]">{formatTokens(totalTokens)}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">Input + output + cache</p>
+              <p className="text-xs text-muted-foreground">
+                {!win && sessionAgentCount > 0 ? 'Input + output + cache, incl. agents' : 'Input + output + cache'}
+              </p>
             </CardContent>
           </Card>
 
@@ -252,11 +282,17 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
                 <DollarSign className="h-4 w-4" /> Cost
               </CardDescription>
               <CardTitle className="text-3xl font-bold tabular-nums text-[#d97706]">
-                {formatCost(replay.total_cost ?? 0)}
+                {formatCost(headerCost)}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">{win ? 'Estimated spend in window' : 'Estimated spend'}</p>
+              <p className="text-xs text-muted-foreground">
+                {win
+                  ? 'Estimated orchestrator spend in window'
+                  : sessionAgentCount > 0
+                    ? `main ${formatCost(sessionTotalCost - agentsCost)} · agents ${formatCost(agentsCost)} (${sessionAgentCount})`
+                    : 'Estimated spend'}
+              </p>
             </CardContent>
           </Card>
 
@@ -386,7 +422,7 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
             </div>
           )}
           {tab === 'agents' && timeline && (
-            <AgentTimelineTab sessionId={id} timeline={timeline} window={win} onWindowChange={onWindowChange} onSelectAgent={onSelectAgent} onOpenOrchestratorAt={onOpenOrchestratorAt} />
+            <AgentTimelineTab sessionId={id} timeline={timeline} window={win} onWindowChange={onWindowChange} onSelectAgent={onSelectAgent} onSelectWorkflow={onSelectWorkflow} onOpenOrchestratorAt={onOpenOrchestratorAt} />
           )}
         </TabsContent>
 
@@ -426,8 +462,19 @@ export default function SessionDetailPage({ params }: { params: Promise<{ id: st
         agent={selectedAgent}
         scrollToMs={selectedAt}
         parent={selectedAgent?.parent_id ? agentsById.get(selectedAgent.parent_id) : undefined}
+        workflow={selectedAgent?.workflow_id ? runById.get(selectedAgent.workflow_id) : undefined}
         onClose={() => setSelectedAgent(null)}
         onJumpToTurn={uuid => { setSelectedAgent(null); jumpToTurn(uuid) }}
+        onOpenWorkflow={onSelectWorkflow}
+      />
+
+      <WorkflowDetailsSheet
+        sessionId={id}
+        run={selectedRun}
+        agents={selectedRun ? runAgents.get(selectedRun.id) ?? [] : []}
+        onClose={() => setSelectedRun(null)}
+        onOpenAgent={a => onSelectAgent(a)}
+        onJumpToTurn={uuid => { setSelectedRun(null); jumpToTurn(uuid) }}
       />
     </div>
   )

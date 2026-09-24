@@ -20,6 +20,8 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   Bash:           'shell',
 
   Task:           'agent',
+  Agent:          'agent',
+  Workflow:       'agent',
   TaskCreate:     'agent',
   TaskUpdate:     'agent',
   TaskList:       'agent',

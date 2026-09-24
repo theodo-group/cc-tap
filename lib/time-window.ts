@@ -23,10 +23,17 @@ export function intersectsWindow(start: string | number, end: string | number, w
   return s <= w.to && e >= w.from
 }
 
+/** ms since epoch from an ISO timestamp or a plain integer ms value; NaN otherwise */
+function parseInstant(value: string | null): number {
+  if (value === null) return NaN
+  if (/^-?\d+$/.test(value)) return Number(value)
+  return Date.parse(value)
+}
+
 export function windowFromSearch(search: string): TimeWindow | null {
   const p = new URLSearchParams(search)
-  const from = Date.parse(p.get('from') ?? '')
-  const to = Date.parse(p.get('to') ?? '')
+  const from = parseInstant(p.get('from'))
+  const to = parseInstant(p.get('to'))
   if (Number.isNaN(from) || Number.isNaN(to)) return null
   return normalizeWindow(from, to)
 }

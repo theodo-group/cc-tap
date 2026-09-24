@@ -75,7 +75,12 @@ export interface SessionMeta {
   files_modified: number
   message_hours: number[]
   user_message_timestamps: string[]
+  /** Per-model usage across the orchestrator and every sub-agent transcript */
   model_usage?: Record<string, ModelUsage>
+  /** Per-model usage of the sub-agent / workflow transcripts alone, a subset of model_usage */
+  agent_model_usage?: Record<string, ModelUsage>
+  /** Sub-agent transcripts (Agent, Task, Workflow runs) that were read for this session */
+  agent_count?: number
 }
 
 // ─── Facets ──────────────────────────────────────────────────────────────────
@@ -96,6 +101,36 @@ export interface Facet {
 
 // ─── Session with Facet joined ───────────────────────────────────────────────
 
+/** The numbers a session is measured by, whole or restricted to a time window.
+ *  Whole-session values come from `sessionMetrics()`, windowed ones from
+ *  `sliceSession()`; both live in lib/session-ledger.ts. */
+export interface SessionMetrics {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens: number
+  cache_creation_input_tokens: number
+  user_message_count: number
+  /** orchestrator turns only, like SessionMeta.assistant_message_count */
+  assistant_message_count: number
+  /** orchestrator tool_use blocks only, like SessionMeta.tool_counts */
+  tool_calls: number
+  duration_minutes: number
+  /** tokens (all four kinds) spent by sub-agent turns */
+  agents_tokens: number
+  agents_cost: number
+  model_usage: Record<string, ModelUsage>
+  estimated_cost: number
+}
+
+/** A session's metrics restricted to the turns inside a time window */
+export interface SessionSlice extends SessionMetrics {
+  /** ms, inclusive */
+  from: number
+  to: number
+  /** the session starts before `from` or keeps going after `to` */
+  partial: boolean
+}
+
 export interface SessionWithFacet extends SessionMeta {
   facet?: Facet
   estimated_cost: number
@@ -105,6 +140,34 @@ export interface SessionWithFacet extends SessionMeta {
   git_branch?: string
   has_compaction?: boolean
   has_thinking?: boolean
+  /** Present when the list was requested with ?from&to */
+  slice?: SessionSlice
+}
+
+/** GET /api/sessions?from&to */
+export interface SessionsRangeSummary {
+  from: number
+  to: number
+  sessions: number
+  tokens: number
+  cost: number
+}
+
+export interface SessionsResponse {
+  sessions: SessionWithFacet[]
+  total: number
+  range?: SessionsRangeSummary
+}
+
+/** GET /api/usage-windows: one 5h usage window in which a request was
+ *  rejected for hitting the subscription limit. `start` is inferred as
+ *  reset − 5h; the quota is shared with claude.ai and other devices. */
+export interface UsageWindow {
+  /** ms */
+  reset: number
+  start: number
+  first_hit_at: number
+  sessions: number
 }
 
 // ─── Live Sessions (~/.claude/sessions) ──────────────────────────────────────
@@ -477,6 +540,104 @@ export interface AgentRun {
   /** uuid of the assistant message in the orchestrator log that launched it (depth 1 only) */
   launch_turn_uuid?: string
   children_count: number
+  // ─── Set when the agent was started by a Workflow run
+  workflow_id?: string
+  /** position of the agent() call in the run */
+  workflow_index?: number
+  workflow_phase?: string
+  workflow_phase_index?: number
+  workflow_state?: WorkflowAgentState
+  workflow_error?: string
+  workflow_attempt?: number
+  /** why the previous attempt was retried, e.g. "stalled" */
+  workflow_attempt_reason?: string
+  workflow_tool_calls?: number
+  workflow_result_preview?: string
+  queued_at?: string
+  /** false for rows synthesized from the run record (blocked, never started, transcript missing) */
+  has_transcript?: boolean
+}
+
+export type WorkflowAgentState = 'done' | 'error' | 'blocked' | 'cached' | 'running' | 'queued'
+
+export interface WorkflowPhase {
+  /** 1-based, as in the run record */
+  index: number
+  title: string
+  detail?: string
+}
+
+/** One Workflow tool run: <session>/workflows/wf_<id>.json plus <session>/subagents/workflows/wf_<id>/ */
+export interface WorkflowRun {
+  id: string
+  name: string
+  summary?: string
+  status: AgentOutcome
+  /** one per launch; a resume adds a new task id for the same run */
+  task_ids: string[]
+  attempts: number
+  resumed: boolean
+  launch_tool_use_id?: string
+  /** uuid of the assistant message in the orchestrator log that launched it first */
+  launch_turn_uuid?: string
+  start: string
+  end: string
+  duration_ms: number
+  phases: WorkflowPhase[]
+  agent_count: number
+  done_count: number
+  error_count: number
+  blocked_count: number
+  running_count: number
+  total_tokens?: number
+  total_tool_calls?: number
+  /** sum over the run's agents */
+  estimated_cost: number
+  error?: string
+  script_path?: string
+  default_model?: string
+  /** the record is written when the run ends; false while it runs, or after a crash */
+  has_record: boolean
+}
+
+export interface CappedText {
+  text: string
+  truncated: boolean
+  total_chars: number
+}
+
+export interface WorkflowJournalEntry {
+  type: string
+  key?: string
+  agent_id?: string
+  label?: string
+  phase?: string
+  result?: CappedText
+}
+
+/** GET /api/sessions/[id]/workflows/[runId] */
+export interface WorkflowRunDetail {
+  id: string
+  has_record: boolean
+  name: string
+  status: AgentOutcome
+  summary?: string
+  error?: string
+  script_path?: string
+  script?: CappedText
+  args?: CappedText
+  result?: CappedText
+  logs: string[]
+  phases: WorkflowPhase[]
+  /** raw workflowProgress entries of the record, as written by Claude Code */
+  progress: Record<string, unknown>[]
+  default_model?: string
+  total_tokens?: number
+  total_tool_calls?: number
+  start?: string
+  end?: string
+  duration_ms?: number
+  journal: WorkflowJournalEntry[]
 }
 
 export type ContextEventType = 'compact' | 'clear' | 'rewind'
@@ -504,5 +665,6 @@ export interface AgentTimeline {
     prompts: PromptTick[]
   }
   agents: AgentRun[]
+  workflows: WorkflowRun[]
   context_events: ContextEvent[]
 }
