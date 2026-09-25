@@ -7,6 +7,8 @@ const os   = require('os')
 const path = require('path')
 const fs   = require('fs')
 
+const { openPath } = require('./open-path')
+
 const PKG_DIR    = path.join(__dirname, '..')
 const SERVER_JS  = path.join(PKG_DIR, '.next', 'standalone', 'server.js')
 
@@ -255,6 +257,9 @@ async function main() {
   const hostname = process.env.HOSTNAME ?? '127.0.0.1'
   const port     = await findFreePort(Number(process.env.PORT) || 3000)
   const url      = `http://${hostname === '0.0.0.0' ? 'localhost' : hostname}:${port}`
+  // --open /sessions/<id>: land on that page rather than the overview.
+  const landing  = openPath(args.open)
+  if (args.open && !landing) console.log(`  ${O}!${R}  Ignoring --open ${String(args.open)}: not a plain app path (e.g. /sessions/<id>).`)
 
   console.log(`  ${DIM}Starting server on${R} ${O2}${B}${url}${R}`)
   console.log(`  ${DIM}Inspector proxy is launched on demand from the dashboard.${R}\n`)
@@ -272,8 +277,8 @@ async function main() {
   function checkReady(text) {
     if (!opened && /Local:|ready|started server|listening on/i.test(text)) {
       opened = true
-      console.log(`\n  ${O}✓${R}  Opening ${B}${url}${R} in your browser…\n`)
-      openBrowser(url)
+      console.log(`\n  ${O}✓${R}  Opening ${B}${url}${landing}${R} in your browser…\n`)
+      openBrowser(`${url}${landing}`)
     }
   }
 
