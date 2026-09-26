@@ -38,6 +38,7 @@ This project follows a simple changelog format:
 
 ### Fixed
 
+- **Tokens, cost and message counts no longer count an API response once per content block.** Claude Code writes one transcript line per block of a response (thinking, text, each tool call), and each of those lines repeats the response's `usage`; an early line can carry an intermediate snapshot with a lower `output_tokens`. cc-tap summed them line by line, so a session's tokens, cost and "assistant messages" came out about 2.5 times too high: over 40 recent transcripts, 2,130 responses were spread over 5,213 lines. A response is now keyed by `message.id` (plus `requestId`) and counted once, at the per-field max of its lines, as ccusage and claude-devtools count it (`lib/response-usage.ts`). The fix covers the session totals, the folded sub-agents and the replay; in the replay, the usage sits on the response's last line. A line without `message.id` still stands alone.
 - The flame chart hover card could describe a different row than the one under the cursor. Each row now owns its hover and click through a full-width band, and the card is positioned by the chart wrapper.
 
 ## 0.8.0

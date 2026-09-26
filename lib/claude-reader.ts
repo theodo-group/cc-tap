@@ -17,6 +17,7 @@ import { pruneScanCache, scanFile } from '@/lib/transcript-scan'
 import { mapPool, readJSONLLines } from '@/lib/jsonl'
 import { FALLBACK_MODEL } from '@/lib/pricing'
 import { LedgerBuilder, NO_MODEL, hasModeledTurns, ledgerMetrics, type TurnLedger } from '@/lib/session-ledger'
+import { ResponseTracker, responseKey } from '@/lib/response-usage'
 
 export { mapPool, readJSONLLines }
 
@@ -139,6 +140,10 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Se
   // Tokens, models and message counts are recorded per turn; the session's
   // counters are derived from the ledger after the loop
   const ledger = new LedgerBuilder()
+  // One turn per API response, not per line: a response is written as one line
+  // per content block, each repeating its usage (lib/response-usage.ts).
+  const responses = new ResponseTracker()
+  const turnOf = new Map<string, number>()
   const rateLimitHits: RateLimitHit[] = []
 
   try {
@@ -195,12 +200,11 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Se
             const at = new Date(ts).getTime()
             if (!isNaN(at)) rateLimitHits.push({ ts: at, resets_at: quota.resetsAt * 1000 })
           }
-          if (msg?.usage) {
-            turnInput = msg.usage.input_tokens ?? 0
-            turnOutput = msg.usage.output_tokens ?? 0
-            turnCacheRead = msg.usage.cache_read_input_tokens ?? 0
-            turnCacheWrite = msg.usage.cache_creation_input_tokens ?? 0
-          }
+          const { isNew, delta } = responses.add(obj, msg?.usage)
+          turnInput = delta.input_tokens ?? 0
+          turnOutput = delta.output_tokens ?? 0
+          turnCacheRead = delta.cache_read_input_tokens ?? 0
+          turnCacheWrite = delta.cache_creation_input_tokens ?? 0
           const content = msg?.content
           if (Array.isArray(content)) {
             for (const c of content) {
@@ -216,13 +220,18 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Se
               }
             }
           }
-          if (ts) {
-            ledger.addTurn({
+          const key = responseKey(obj)
+          const turn = key === null ? undefined : turnOf.get(key)
+          if (!isNew && turn !== undefined) {
+            ledger.growTurn(turn, { input: turnInput, output: turnOutput, cacheRead: turnCacheRead, cacheWrite: turnCacheWrite, toolCalls: turnToolCalls })
+          } else if (ts) {
+            const i = ledger.addTurn({
               ts: new Date(ts).getTime(),
               model: msg?.model ?? NO_MODEL,
               input: turnInput, output: turnOutput, cacheRead: turnCacheRead, cacheWrite: turnCacheWrite,
               toolCalls: turnToolCalls,
             })
+            if (key !== null && i >= 0) turnOf.set(key, i)
           }
         }
       } catch { /* skip malformed line */ }

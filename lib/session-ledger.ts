@@ -16,7 +16,8 @@ import { intersectsWindow, type TimeWindow } from '@/lib/time-window'
 export const NO_MODEL = ''
 
 export interface TurnLedger {
-  /** parallel arrays, one entry per assistant line (orchestrator + agents) */
+  /** parallel arrays, one entry per API response (orchestrator + agents): the
+   *  lines of one response are folded into one turn (lib/response-usage.ts) */
   ts: Float64Array          // ms since epoch
   model: Uint8Array         // index into `models`
   input: Float64Array
@@ -54,11 +55,12 @@ export class LedgerBuilder {
     return i
   }
 
+  /** Appends a turn (one API response) and returns its index, or -1 when it has no usable time. */
   addTurn(t: {
     ts: number; model: string; input: number; output: number
     cacheRead: number; cacheWrite: number; toolCalls: number; isAgent?: boolean
-  }): void {
-    if (!Number.isFinite(t.ts)) return
+  }): number {
+    if (!Number.isFinite(t.ts)) return -1
     this.ts.push(t.ts)
     this.model.push(this.indexOf(t.model))
     this.input.push(t.input)
@@ -67,6 +69,17 @@ export class LedgerBuilder {
     this.cacheWrite.push(t.cacheWrite)
     this.toolCalls.push(Math.min(t.toolCalls, 0xffff))
     this.isAgent.push(t.isAgent ? 1 : 0)
+    return this.ts.length - 1
+  }
+
+  /** Adds a later line of the same response to turn `i`: its token growth and its tool calls. */
+  growTurn(i: number, d: { input: number; output: number; cacheRead: number; cacheWrite: number; toolCalls: number }): void {
+    if (i < 0 || i >= this.ts.length) return
+    this.input[i] += d.input
+    this.output[i] += d.output
+    this.cacheRead[i] += d.cacheRead
+    this.cacheWrite[i] += d.cacheWrite
+    this.toolCalls[i] = Math.min(this.toolCalls[i] + d.toolCalls, 0xffff)
   }
 
   addUser(ts: number): void {
