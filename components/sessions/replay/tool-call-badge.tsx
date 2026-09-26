@@ -22,8 +22,10 @@ function truncate(s: string, n = 80): string {
   return s.length > n ? s.slice(0, n) + '…' : s
 }
 
-function ExpandableBlock({ label, text, isError = false }: { label: string; text: string; isError?: boolean }) {
-  const [open, setOpen] = useState(false)
+function ExpandableBlock({ label, text, isError = false, autoOpen = false }: { label: string; text: string; isError?: boolean; autoOpen?: boolean }) {
+  // null until the reader decides; a search hit inside the text opens it meanwhile
+  const [open, setOpen] = useState<boolean | null>(null)
+  const isOpen = open ?? autoOpen
   const long = text.length > 1000
   return (
     <div>
@@ -39,17 +41,17 @@ function ExpandableBlock({ label, text, isError = false }: { label: string; text
         {long && (
           <button
             type="button"
-            onClick={() => setOpen(o => !o)}
+            onClick={() => setOpen(!isOpen)}
             className="text-[11px] text-muted-foreground/70 hover:text-foreground transition-colors"
           >
-            {open ? 'Show less' : `Show full (${text.length.toLocaleString()} chars)`}
+            {isOpen ? 'Show less' : `Show full (${text.length.toLocaleString()} chars)`}
           </button>
         )}
       </div>
       <pre
         className={cn(
           'overflow-auto whitespace-pre-wrap break-all rounded-md border p-2 text-xs',
-          open ? 'max-h-[60vh]' : 'max-h-48',
+          isOpen ? 'max-h-[60vh]' : 'max-h-48',
           isError
             ? 'border-red-500/25 bg-red-950/20 text-red-200/90'
             : 'border-border/50 bg-background/80 text-muted-foreground',
@@ -89,8 +91,11 @@ function ToolIcon({ name, color }: { name: string; color: string }) {
   return <Icon className="h-3.5 w-3.5 shrink-0 opacity-80" style={{ color }} />
 }
 
-export function ToolCallBadge({ tool, result }: { tool: ToolCall; result?: { content: string; is_error: boolean } }) {
-  const [expanded, setExpanded] = useState(false)
+export function ToolCallBadge({ tool, result, inInput = false, inResult = false }: { tool: ToolCall; result?: { content: string; is_error: boolean }; inInput?: boolean; inResult?: boolean }) {
+  const [expanded, setExpanded] = useState<boolean | null>(null)
+  const input = JSON.stringify(tool.input, null, 2)
+  // A search hit inside the call opens it, unless the reader has said otherwise
+  const isExpanded = expanded ?? (inInput || inResult)
   const color = toolBarColor(tool.name)
   const mcp = parseMcpTool(tool.name)
   const arg = getToolArg(tool)
@@ -108,7 +113,7 @@ export function ToolCallBadge({ tool, result }: { tool: ToolCall; result?: { con
         type="button"
         variant="outline"
         size="sm"
-        onClick={() => setExpanded(e => !e)}
+        onClick={() => setExpanded(!isExpanded)}
         className={cn(
           'h-auto min-h-8 w-full justify-between gap-2 rounded-none border-0 bg-transparent px-2.5 py-2 text-left shadow-none hover:bg-muted/50',
           'font-mono text-sm'
@@ -128,20 +133,22 @@ export function ToolCallBadge({ tool, result }: { tool: ToolCall; result?: { con
           ) : null}
         </span>
         <ChevronDown
-          className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200', expanded && 'rotate-180')}
+          className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200', isExpanded && 'rotate-180')}
         />
       </Button>
-      {expanded && (
+      {isExpanded && (
         <div className="space-y-2 border-t px-2.5 py-2.5" style={{ borderColor: categoryColorMix(color, 24) }}>
           <ExpandableBlock
             label="Input"
-            text={JSON.stringify(tool.input, null, 2)}
+            text={input}
+            autoOpen={inInput}
           />
           {result && (
             <ExpandableBlock
               label={result.is_error ? 'Error' : 'Result'}
               text={result.content}
               isError={result.is_error}
+              autoOpen={inResult}
             />
           )}
         </div>

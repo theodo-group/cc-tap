@@ -64,11 +64,14 @@ function formatPathForUi(path: string, max = 100): string {
 interface Props {
   content: string
   isError: boolean
+  /** the search found a term in this result, so the block opens */
+  matched?: boolean
 }
 
-export function UserToolResult({ content, isError }: Props) {
+export function UserToolResult({ content, isError, matched = false }: Props) {
   const parsed = parseToolResultMessage(content)
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState<boolean | null>(null)
+  const isExpanded = expanded ?? matched
 
   if (isError) {
     const longErr = content.length > 600
@@ -81,18 +84,18 @@ export function UserToolResult({ content, isError }: Props) {
             {longErr && (
               <button
                 type="button"
-                onClick={() => setExpanded(e => !e)}
+                onClick={() => setExpanded(!isExpanded)}
                 className="text-[11px] text-red-300/70 hover:text-red-200 transition-colors"
               >
-                {expanded ? 'Show less' : `Show full (${content.length.toLocaleString()} chars)`}
+                {isExpanded ? 'Show less' : `Show full (${content.length.toLocaleString()} chars)`}
               </button>
             )}
           </div>
           <pre
             className={cn(
               'mt-1 overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-[12px] leading-relaxed text-red-200/90',
-              longErr && !expanded && 'max-h-32',
-              longErr && expanded && 'max-h-[60vh]',
+              longErr && !isExpanded && 'max-h-32',
+              longErr && isExpanded && 'max-h-[60vh]',
             )}
           >
             {content}
@@ -173,18 +176,18 @@ export function UserToolResult({ content, isError }: Props) {
         {long && (
           <button
             type="button"
-            onClick={() => setExpanded(e => !e)}
+            onClick={() => setExpanded(!isExpanded)}
             className="text-[11px] text-muted-foreground/70 hover:text-foreground transition-colors"
           >
-            {expanded ? 'Show less' : `Show full (${text.length.toLocaleString()} chars)`}
+            {isExpanded ? 'Show less' : `Show full (${text.length.toLocaleString()} chars)`}
           </button>
         )}
       </div>
       <pre
         className={cn(
           'mt-1.5 overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-[12px] leading-relaxed',
-          long && !expanded && 'max-h-32',
-          long && expanded && 'max-h-[60vh]',
+          long && !isExpanded && 'max-h-32',
+          long && isExpanded && 'max-h-[60vh]',
         )}
       >
         {text}
