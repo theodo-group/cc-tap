@@ -9,6 +9,7 @@ import type {
 import { estimateCostFromUsage } from '@/lib/pricing'
 import { readJSONLLines } from '@/lib/jsonl'
 import { findRewinds } from '@/lib/agent-timeline'
+import { responseKey, responsesOf } from '@/lib/response-usage'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyLine = Record<string, any>
@@ -29,6 +30,10 @@ export async function parseSessionReplay(
   let version: string | undefined
   let gitBranch: string | undefined
   let totalCost = 0
+  // A response is written as one line per content block, each repeating its
+  // usage: the response's usage (the per-field max over its lines) goes on its
+  // last line, the others carry none, so every sum over turns counts it once.
+  const responses = responsesOf(lines)
 
   // Build a map of turn_duration events keyed by parentUuid
   const turnDurations: Map<string, number> = new Map()
@@ -52,7 +57,7 @@ export async function parseSessionReplay(
 
   let turnIndex = 0
 
-  for (const l of lines) {
+  for (const [lineIndex, l] of lines.entries()) {
     // ─── Summary event
     if (l.type === 'summary') {
       summaries.push({ uuid: l.uuid ?? '', summary: l.summary ?? '', leaf_uuid: l.leafUuid ?? '' })
@@ -114,7 +119,10 @@ export async function parseSessionReplay(
     // ─── Assistant turn
     if (l.type === 'assistant') {
       const msg = l.message ?? {}
-      const usage = msg.usage as TurnUsage | undefined
+      const key = responseKey(l)
+      const usage = (key === null
+        ? msg.usage
+        : responses.last.get(key) === lineIndex ? responses.usage.get(key) : undefined) as TurnUsage | undefined
       const model = msg.model as string | undefined
       const content = msg.content ?? []
 

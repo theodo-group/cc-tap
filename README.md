@@ -143,6 +143,16 @@ $env:CLAUDE_CONFIG_DIR="C:\Users\you\.claude-work"; npx cc-tap
 
 The active config directory is shown in the CLI banner on launch.
 
+## Open a Given Page
+
+`--open <path>` makes the browser land on that page instead of the overview, for example one session:
+
+```bash
+CLAUDE_CONFIG_DIR=~/pulled-task/claude npx cc-tap --open /sessions/<session-id>
+```
+
+Only a plain app path is accepted (a leading `/`, letters, digits, `/ _ - . ~`, and an optional query). Anything else is ignored with a warning, and the overview opens.
+
 ## Run From Source
 
 ### Prerequisites

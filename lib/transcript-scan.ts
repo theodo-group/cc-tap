@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { PromptTick, TimeSegment, TurnUsage } from '@/types/claude'
 import { readJSONLLines } from '@/lib/jsonl'
 import { LedgerBuilder, NO_MODEL, type TurnLedger } from '@/lib/session-ledger'
+import { ResponseTracker, responseKey, type UsageFields } from '@/lib/response-usage'
 import { resultText } from '@/lib/tool-search'
 import { parseWorkflowLaunchText } from '@/lib/workflow-runs'
 
@@ -161,6 +162,9 @@ export function scanTranscript(lines: AnyLine[]): TranscriptScan {
     workflowResults: new Map(),
   }
   const ledger = new LedgerBuilder()
+  // One response, one usage: its lines repeat it (lib/response-usage.ts).
+  const responses = new ResponseTracker()
+  const turnOf = new Map<string, number>()
 
   for (const l of lines) {
     const ts: string | undefined = l.timestamp
@@ -197,15 +201,23 @@ export function scanTranscript(lines: AnyLine[]): TranscriptScan {
     }
 
     if (l.type === 'assistant') {
-      scan.assistantCount++
       const msg = l.message ?? {}
       const priced = AssistantPricing.safeParse(msg)
+      const { isNew, delta } = responses.add(l, priced.success ? (priced.data.usage as UsageFields | undefined) : undefined)
+      if (isNew) scan.assistantCount++
+      // What this line adds: the whole usage for a new response, its growth otherwise.
+      const added = {
+        input_tokens: delta.input_tokens ?? 0,
+        output_tokens: delta.output_tokens ?? 0,
+        cache_read_input_tokens: delta.cache_read_input_tokens ?? 0,
+        cache_creation_input_tokens: delta.cache_creation_input_tokens ?? 0,
+      }
       if (priced.success) {
         const { model, usage } = priced.data
         if (usage) {
-          addUsage(scan.usage, usage)
-          if (model) addUsage(scan.usageByModel[model] ??= emptyUsage(), usage)
-          else addUsage(scan.unattributedUsage, usage)
+          addUsage(scan.usage, added)
+          if (model) addUsage(scan.usageByModel[model] ??= emptyUsage(), added)
+          else addUsage(scan.unattributedUsage, added)
         }
         if (!scan.model && model) scan.model = model
       }
@@ -243,15 +255,19 @@ export function scanTranscript(lines: AnyLine[]): TranscriptScan {
           })
         }
       }
-      if (ts && priced.success && priced.data.usage) {
-        const u = priced.data.usage
-        ledger.addTurn({
+      const key = responseKey(l)
+      const turn = key === null ? undefined : turnOf.get(key)
+      if (!isNew && turn !== undefined) {
+        ledger.growTurn(turn, { input: added.input_tokens, output: added.output_tokens, cacheRead: added.cache_read_input_tokens, cacheWrite: added.cache_creation_input_tokens, toolCalls })
+      } else if (ts && priced.success && priced.data.usage) {
+        const i = ledger.addTurn({
           ts: new Date(ts).getTime(),
           model: priced.data.model ?? NO_MODEL,
-          input: u.input_tokens, output: u.output_tokens,
-          cacheRead: u.cache_read_input_tokens, cacheWrite: u.cache_creation_input_tokens,
+          input: added.input_tokens, output: added.output_tokens,
+          cacheRead: added.cache_read_input_tokens, cacheWrite: added.cache_creation_input_tokens,
           toolCalls,
         })
+        if (key !== null && i >= 0) turnOf.set(key, i)
       }
     }
   }
