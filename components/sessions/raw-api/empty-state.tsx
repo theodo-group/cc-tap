@@ -1,7 +1,10 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Radio, Terminal } from 'lucide-react'
+import { CommandSnippet } from '@/components/proxy/capture-controls'
 
-export function CapturesEmptyState({ available }: { available: boolean }) {
+const OTEL_ENV = 'OTEL_LOG_RAW_API_BODIES=file:$HOME/.cc-lens/otel-bodies'
+
+export function CapturesEmptyState({ available, sessionId }: { available: boolean; sessionId?: string }) {
   if (!available) {
     return (
       <Card className="mx-auto max-w-2xl">
@@ -9,11 +12,10 @@ export function CapturesEmptyState({ available }: { available: boolean }) {
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <Radio className="h-5 w-5 text-muted-foreground" />
           </div>
-          <h3 className="text-base font-semibold">Inspector proxy not running</h3>
+          <h3 className="text-base font-semibold">No API captures yet</h3>
           <p className="text-sm text-muted-foreground">
-            Start <code className="rounded bg-muted px-1 py-0.5 text-xs">npx cc-tap</code> without{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">--no-proxy</code> to capture API
-            traffic. The dashboard will show captures here once Claude Code makes a request through it.
+            Click <strong>Live Capture</strong> in the top bar, then <strong>Start</strong>, and run Claude Code
+            with the command it shows. The requests and responses of that session will appear here.
           </p>
         </CardContent>
       </Card>
@@ -27,15 +29,13 @@ export function CapturesEmptyState({ available }: { available: boolean }) {
         </div>
         <h3 className="text-base font-semibold">No captures for this session</h3>
         <p className="text-sm text-muted-foreground">
-          The inspector proxy is running but hasn&apos;t recorded any requests for this session yet.
-          Point Claude Code at it and resume work in this session:
+          Nothing was recorded for this session yet. With capture started from <strong>Live Capture</strong>,
+          resume this session from its project directory:
         </p>
-        <pre className="mx-auto rounded-md bg-muted px-3 py-2 text-left text-xs font-mono text-muted-foreground">
-          {`export ANTHROPIC_BASE_URL=http://localhost:<proxy-port>
-export ENABLE_TOOL_SEARCH=true
-export ANTHROPIC_API_KEY=sk-ant-...
-claude --resume`}
-        </pre>
+        <CommandSnippet command={`${OTEL_ENV} claude --resume${sessionId ? ` ${sessionId}` : ''}`} />
+        <p className="text-xs text-muted-foreground">
+          In proxy mode, use the command from the Live Capture popover instead.
+        </p>
       </CardContent>
     </Card>
   )

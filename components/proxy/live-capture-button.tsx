@@ -1,71 +1,45 @@
 'use client'
 
 import { useState } from 'react'
-import useSWR from 'swr'
-import { Radio, Copy, Check, Play, Square, Loader2 } from 'lucide-react'
+import { Radio, Play, Square, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
+import {
+  CaptureModeHint, CommandSnippet, OTEL_EXPLANATION, PROXY_EXPLANATION, proxyCommand, useCaptureStatus,
+  type CaptureMode,
+} from './capture-controls'
 
-interface ProxyStatus {
-  running: boolean
-  pid?: number
-  port?: number
-  startedAt?: number
+function StatusDot({ on }: { on: boolean }) {
+  return <span className={cn('inline-flex h-2 w-2 shrink-0 rounded-full', on ? 'bg-emerald-500' : 'bg-muted-foreground/40')} />
 }
 
-const fetcher = (url: string) => fetch(url).then(r => r.json())
-
-function connectCommand(port: number): string {
-  return `ENABLE_TOOL_SEARCH=true ANTHROPIC_BASE_URL=http://localhost:${port} claude`
-}
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-  return (
-    <Button
-      variant="outline"
-      size="icon"
-      className="h-7 w-7 shrink-0"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text)
-          setCopied(true)
-          setTimeout(() => setCopied(false), 1500)
-        } catch { /* ignore — clipboard may be blocked in some contexts */ }
-      }}
-      aria-label="Copy to clipboard"
-    >
-      {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+function StartStop({ running, busy, onClick }: { running: boolean; busy: boolean; onClick: () => void }) {
+  return running ? (
+    <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={onClick} disabled={busy}>
+      {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Square className="h-3 w-3" />}
+      Stop
+    </Button>
+  ) : (
+    <Button size="sm" className="h-7 gap-1.5 text-xs" onClick={onClick} disabled={busy}>
+      {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+      Start
     </Button>
   )
 }
 
 export function LiveCaptureButton() {
-  const { data: status, mutate } = useSWR<ProxyStatus>(
-    '/api/proxy/status',
-    fetcher,
-    { refreshInterval: 3000 },
-  )
-  const [busy, setBusy] = useState<'start' | 'stop' | null>(null)
+  const { otel, proxy, act } = useCaptureStatus()
+  const [busy, setBusy] = useState<CaptureMode | null>(null)
 
-  const running = !!status?.running
-  const port = status?.port
+  const otelRunning = !!otel?.running
+  const proxyRunning = !!proxy?.running
+  const port = proxy?.port
 
-  async function handleStart() {
-    setBusy('start')
+  async function toggle(mode: CaptureMode, running: boolean) {
+    setBusy(mode)
     try {
-      await fetch('/api/proxy/start', { method: 'POST' })
-      await mutate()
-    } finally {
-      setBusy(null)
-    }
-  }
-  async function handleStop() {
-    setBusy('stop')
-    try {
-      await fetch('/api/proxy/stop', { method: 'POST' })
-      await mutate()
+      await act(mode, running ? 'stop' : 'start')
     } finally {
       setBusy(null)
     }
@@ -81,13 +55,13 @@ export function LiveCaptureButton() {
           aria-label="Live capture"
         >
           <span className="relative flex h-2 w-2">
-            {running && (
+            {(otelRunning || proxyRunning) && (
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
             )}
             <span
               className={cn(
                 'relative inline-flex h-2 w-2 rounded-full',
-                running ? 'bg-emerald-500' : 'bg-muted-foreground/40',
+                otelRunning || proxyRunning ? 'bg-emerald-500' : 'bg-muted-foreground/40',
               )}
             />
           </span>
@@ -95,61 +69,43 @@ export function LiveCaptureButton() {
           <span className="hidden sm:inline">Live Capture</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-96 p-0">
+      {/* No auto-focus on open: it would land on the info icon and pop its tooltip over the content. */}
+      <PopoverContent align="end" className="w-96 p-0" onOpenAutoFocus={e => e.preventDefault()}>
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                'inline-flex h-2 w-2 rounded-full',
-                running ? 'bg-emerald-500' : 'bg-muted-foreground/40',
-              )}
-            />
-            <span className="text-sm font-medium">
-              {running ? `Capturing on :${port}` : 'Proxy not running'}
-            </span>
+            <StatusDot on={otelRunning} />
+            <span className="text-sm font-medium">{otelRunning ? 'Capturing' : 'Capture off'}</span>
+            <CaptureModeHint kind="info" text={OTEL_EXPLANATION} />
           </div>
-          {running ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 gap-1.5 text-xs"
-              onClick={handleStop}
-              disabled={busy !== null}
-            >
-              {busy === 'stop' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Square className="h-3 w-3" />}
-              Stop
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              className="h-7 gap-1.5 text-xs"
-              onClick={handleStart}
-              disabled={busy !== null}
-            >
-              {busy === 'start' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-              Start
-            </Button>
-          )}
+          <StartStop running={otelRunning} busy={busy !== null} onClick={() => toggle('otel', otelRunning)} />
         </div>
         <div className="px-3 py-3 space-y-2">
-          {running && port ? (
+          {otelRunning && otel ? (
             <>
               <p className="text-xs text-muted-foreground">
-                Point Claude Code at the proxy to start capturing. Run this in a new terminal:
+                Run Claude Code with this variable (or set it in the <code>env</code> of your Claude Code settings):
               </p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 truncate rounded-md bg-muted px-2 py-1.5 text-xs font-mono">
-                  {connectCommand(port)}
-                </code>
-                <CopyButton text={connectCommand(port)} />
-              </div>
+              <CommandSnippet command={otel.command} />
             </>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Click <strong>Start</strong> to launch the inspector proxy on a free port. Once running,
-              you&apos;ll get a copyable command to point Claude Code at it.
+              Click <strong>Start</strong>{' '}to record the request and response bodies Claude Code logs itself.
             </p>
           )}
+        </div>
+        <div className="border-t border-border px-3 py-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <StatusDot on={proxyRunning} />
+              <span className="text-xs font-medium">
+                {proxyRunning ? `Proxy on :${port}` : 'Proxy mode'}
+                <span className="ml-1.5 font-normal text-muted-foreground">advanced</span>
+              </span>
+              <CaptureModeHint kind="warning" text={PROXY_EXPLANATION} />
+            </div>
+            <StartStop running={proxyRunning} busy={busy !== null} onClick={() => toggle('proxy', proxyRunning)} />
+          </div>
+          {proxyRunning && port && <CommandSnippet command={proxyCommand(port)} />}
         </div>
       </PopoverContent>
     </Popover>

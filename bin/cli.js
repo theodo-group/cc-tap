@@ -262,7 +262,7 @@ async function main() {
   if (args.open && !landing) console.log(`  ${O}!${R}  Ignoring --open ${String(args.open)}: not a plain app path (e.g. /sessions/<id>).`)
 
   console.log(`  ${DIM}Starting server on${R} ${O2}${B}${url}${R}`)
-  console.log(`  ${DIM}Inspector proxy is launched on demand from the dashboard.${R}\n`)
+  console.log(`  ${DIM}Live Capture (API request/response recording) is started on demand from the dashboard.${R}\n`)
 
   // --disable-warning=ExperimentalWarning: the app reads the inspector DB via
   // node:sqlite, which emits an ExperimentalWarning on load. Suppress it so it

@@ -389,9 +389,11 @@ function MetaStrip({ detail }: { detail: CaptureDetail }) {
   const items: Array<{ label: string; value: React.ReactNode }> = [
     { label: 'model', value: <code className="font-mono text-xs">{s.model ?? '—'}</code> },
     { label: 'stream', value: s.is_streaming ? 'yes' : 'no' },
-    { label: 'status', value: s.error ? 'error' : (s.status_code ?? '—') },
+    { label: 'status', value: s.status_code || (s.error ? 'error' : '—') },
     { label: 'duration', value: s.duration_ms != null ? `${s.duration_ms} ms` : '—' },
+    { label: 'source', value: s.source === 'otel' ? 'Claude Code log (OTel)' : 'proxy' },
   ]
+  if (s.error) items.push({ label: 'error', value: <span className="text-destructive">{s.error}</span> })
   if (r?.max_tokens) items.push({ label: 'max_tokens', value: r.max_tokens })
   if (r?.thinking) items.push({ label: 'thinking', value: <code className="font-mono text-xs">{JSON.stringify(r.thinking)}</code> })
   if ((r as { output_config?: unknown } | null)?.output_config) {
@@ -452,7 +454,7 @@ function MetaStrip({ detail }: { detail: CaptureDetail }) {
             className="h-7 gap-1.5 text-xs"
           >
             <Download className="h-3 w-3" />
-            {s.is_streaming ? 'Response SSE' : 'Response JSON'}
+            {s.is_streaming ? (s.source === 'otel' ? 'Response SSE (reconstructed)' : 'Response SSE') : 'Response JSON'}
           </Button>
           {assembled && (
             <Button
@@ -558,9 +560,23 @@ function RawSseView({ events }: { events: SseEvent[] }) {
   return <div className="max-h-96 overflow-auto rounded-md bg-muted/40">{rows}</div>
 }
 
+/** Flags an SSE stream the OTel ingester rebuilt from the final message. */
+function ReconstructedBadge() {
+  return (
+    <Badge
+      variant="outline"
+      className="border-amber-500/40 bg-amber-500/5 text-[11px] font-normal text-amber-700 dark:text-amber-400"
+      title="Claude Code's OTel export logs the final message, not the stream. These events were rebuilt from it (one delta per block, no pings), not captured on the wire."
+    >
+      reconstructed
+    </Badge>
+  )
+}
+
 function ResponseCard({ detail }: { detail: CaptureDetail }) {
   const text = detail.response_text
   const streaming = detail.summary.is_streaming
+  const reconstructed = streaming && detail.summary.source === 'otel'
   const idShort = detail.summary.request_id.slice(0, 8)
   const [view, setView] = useState<'assembled' | 'raw'>('assembled')
 
@@ -595,9 +611,10 @@ function ResponseCard({ detail }: { detail: CaptureDetail }) {
           <SectionHeader
             icon={Brain}
             title="Response"
-            subtitle={streaming ? (showAssembled ? 'assembled message' : 'raw SSE stream') : 'JSON'}
+            subtitle={streaming ? (showAssembled ? 'assembled message' : reconstructed ? 'SSE stream' : 'raw SSE stream') : 'JSON'}
           />
           <div className="flex items-center gap-2">
+            {reconstructed && !showAssembled && <ReconstructedBadge />}
             {showToggle && (
               <div className="flex rounded-md border border-border p-0.5">
                 {(['assembled', 'raw'] as const).map((v) => (

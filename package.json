@@ -44,6 +44,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:equivalence": "vitest run --config vitest.equivalence.config.ts",
     "prepublishOnly": "npm run build:dist"
   },
   "dependencies": {

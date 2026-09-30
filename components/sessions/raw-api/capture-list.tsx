@@ -17,10 +17,10 @@ function fmtBytes(n: number | null): string {
 }
 
 function statusTone(status: number | null, error: string | null): string {
+  if (status != null && status >= 500) return 'text-destructive'
+  if (status != null && status >= 400) return 'text-amber-600 dark:text-amber-500'
   if (error) return 'text-destructive'
   if (status == null) return 'text-muted-foreground'
-  if (status >= 500) return 'text-destructive'
-  if (status >= 400) return 'text-amber-600 dark:text-amber-500'
   return 'text-emerald-600 dark:text-emerald-500'
 }
 
@@ -56,7 +56,7 @@ export function CaptureList({
               {fmtTime(c.timestamp)}
             </span>
             <span className={cn('w-10 shrink-0 font-mono text-xs font-semibold tabular-nums', statusTone(c.status_code, c.error))}>
-              {c.error ? 'ERR' : (c.status_code ?? '—')}
+              {c.status_code || (c.error ? 'ERR' : '—')}
             </span>
             <span className="w-32 shrink-0 truncate font-mono text-xs text-muted-foreground">
               {c.path}

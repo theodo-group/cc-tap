@@ -54,7 +54,7 @@ export function RawApiTab({ sessionId }: { sessionId: string }) {
     return <CapturesEmptyState available={false} />
   }
   if (data.captures.length === 0) {
-    return <CapturesEmptyState available={true} />
+    return <CapturesEmptyState available={true} sessionId={sessionId} />
   }
 
   return (

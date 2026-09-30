@@ -2,25 +2,22 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
-import { Radio, Copy, Check, Play } from 'lucide-react'
+import { Radio, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AnatomyView } from '@/components/sessions/raw-api/anatomy-view'
+import {
+  CaptureModeHint, CommandSnippet, OTEL_EXPLANATION, PROXY_EXPLANATION, proxyCommand, useCaptureStatus,
+  type CaptureMode, type OtelStatus, type ProxyStatus,
+} from '@/components/proxy/capture-controls'
 import { formatTokens } from '@/lib/decode'
 import type { CaptureDetail, CaptureSummary } from '@/types/inspector'
 
 interface ListResponse {
   available: boolean
   captures: CaptureSummary[]
-}
-
-interface ProxyStatus {
-  running: boolean
-  pid?: number
-  port?: number
-  startedAt?: number
 }
 
 const fetcher = (url: string) => fetch(url).then(r => {
@@ -40,55 +37,47 @@ function fmtBytes(n: number | null): string {
 }
 
 function statusTone(status: number | null, error: string | null): string {
+  if (status != null && status >= 500) return 'text-destructive'
+  if (status != null && status >= 400) return 'text-amber-600 dark:text-amber-500'
   if (error) return 'text-destructive'
   if (status == null) return 'text-muted-foreground'
-  if (status >= 500) return 'text-destructive'
-  if (status >= 400) return 'text-amber-600 dark:text-amber-500'
   return 'text-emerald-600 dark:text-emerald-500'
 }
 
-function CommandSnippet({ port }: { port: number }) {
-  const cmd = `ENABLE_TOOL_SEARCH=true ANTHROPIC_BASE_URL=http://localhost:${port} claude`
-  const [copied, setCopied] = useState(false)
-  return (
-    <div className="flex items-center gap-2">
-      <code className="flex-1 truncate rounded-md bg-muted px-2 py-1.5 text-xs font-mono">{cmd}</code>
-      <Button
-        variant="outline"
-        size="icon"
-        className="h-7 w-7 shrink-0"
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(cmd)
-            setCopied(true)
-            setTimeout(() => setCopied(false), 1500)
-          } catch { /* */ }
-        }}
-        aria-label="Copy connect command"
-      >
-        {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-      </Button>
-    </div>
-  )
-}
-
-function EmptyState({ status, onStart }: { status: ProxyStatus | undefined; onStart: () => void }) {
-  if (!status?.running) {
+function EmptyState({ otel, proxy, onStart }: {
+  otel: OtelStatus | undefined
+  proxy: ProxyStatus | undefined
+  onStart: (mode: CaptureMode) => void
+}) {
+  if (!otel?.running && !proxy?.running) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <Radio className="h-5 w-5 text-muted-foreground" />
           </div>
-          <h3 className="text-base font-semibold">Inspector proxy is not running</h3>
+          <h3 className="flex items-center gap-2 text-base font-semibold">
+            Live capture is off
+            <CaptureModeHint kind="info" text={OTEL_EXPLANATION} />
+          </h3>
           <p className="max-w-md text-sm text-muted-foreground">
-            Start the proxy to begin intercepting Claude Code traffic. It listens on a free port,
-            captures requests and responses, and streams them here.
+            Start capturing to record every request Claude Code sends to the Anthropic API and its response;
+            they stream in here in real time.
           </p>
-          <Button onClick={onStart} className="gap-2 mt-1">
+          <Button onClick={() => onStart('otel')} className="gap-2 mt-1">
             <Play className="h-4 w-4" />
-            Start proxy
+            Start capture
           </Button>
+          <p className="flex max-w-md items-center gap-1.5 pt-2 text-xs text-muted-foreground">
+            <span>
+              Advanced: to see the wire traffic,{' '}
+              <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => onStart('proxy')}>
+                start the proxy
+              </button>{' '}
+              instead.
+            </span>
+            <CaptureModeHint kind="warning" text={PROXY_EXPLANATION} />
+          </p>
         </CardContent>
       </Card>
     )
@@ -99,22 +88,21 @@ function EmptyState({ status, onStart }: { status: ProxyStatus | undefined; onSt
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10">
           <Radio className="h-5 w-5 text-emerald-500" />
         </div>
-        <h3 className="text-base font-semibold">Proxy running on :{status.port}</h3>
+        <h3 className="text-base font-semibold">
+          {otel?.running ? 'Capturing' : `Proxy running on :${proxy?.port}`}
+        </h3>
         <p className="text-sm text-muted-foreground">
           Waiting for traffic. Run this in a new terminal — captures will appear here in real time.
         </p>
-        <CommandSnippet port={status.port!} />
+        {otel?.running && <CommandSnippet command={otel.command} />}
+        {proxy?.running && proxy.port && <CommandSnippet command={proxyCommand(proxy.port)} />}
       </CardContent>
     </Card>
   )
 }
 
 export function LiveTail() {
-  const { data: status, mutate: mutateStatus } = useSWR<ProxyStatus>(
-    '/api/proxy/status',
-    fetcher,
-    { refreshInterval: 3000 },
-  )
+  const { otel, proxy, act } = useCaptureStatus()
   const { data: list, isLoading } = useSWR<ListResponse>(
     '/api/captures?limit=100',
     fetcher,
@@ -134,10 +122,9 @@ export function LiveTail() {
     fetcher,
   )
 
-  async function handleStart() {
-    await fetch('/api/proxy/start', { method: 'POST' })
-    await mutateStatus()
-  }
+  const capturing = !!otel?.running || !!proxy?.running
+  const statusLabel = [otel?.running && 'Capturing', proxy?.running && `Proxy on :${proxy.port}`]
+    .filter(Boolean).join(' · ') || 'Capture off'
 
   // No data yet → show full-width empty state with proxy controls
   if (isLoading) {
@@ -146,7 +133,7 @@ export function LiveTail() {
   if (captures.length === 0) {
     return (
       <div className="p-4">
-        <EmptyState status={status} onStart={handleStart} />
+        <EmptyState otel={otel} proxy={proxy} onStart={(mode) => act(mode, 'start')} />
       </div>
     )
   }
@@ -156,27 +143,30 @@ export function LiveTail() {
     <div className="flex h-full min-h-0">
       {/* Left pane: tail */}
       <div className="w-[36%] min-w-[320px] max-w-[480px] shrink-0 overflow-y-auto border-r border-border">
-        {/* Header strip showing proxy state inline */}
+        {/* Header strip showing capture state inline */}
         <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-3 py-2 backdrop-blur">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span
                 className={cn(
                   'inline-flex h-2 w-2 rounded-full',
-                  status?.running ? 'bg-emerald-500' : 'bg-muted-foreground/40',
+                  capturing ? 'bg-emerald-500' : 'bg-muted-foreground/40',
                 )}
               />
-              <span className="text-xs font-medium">
-                {status?.running ? `Capturing on :${status.port}` : 'Proxy stopped'}
-              </span>
+              <span className="text-xs font-medium">{statusLabel}</span>
             </div>
             <span className="text-[11px] text-muted-foreground tabular-nums">
               {captures.length} capture{captures.length === 1 ? '' : 's'}
             </span>
           </div>
-          {status?.running && status.port && (
+          {otel?.running && (
             <div className="mt-2">
-              <CommandSnippet port={status.port} />
+              <CommandSnippet command={otel.command} />
+            </div>
+          )}
+          {proxy?.running && proxy.port && (
+            <div className="mt-2">
+              <CommandSnippet command={proxyCommand(proxy.port)} />
             </div>
           )}
         </div>
@@ -196,7 +186,7 @@ export function LiveTail() {
                   <div className="flex items-center gap-2 font-mono tabular-nums">
                     <span className="text-muted-foreground">{fmtTime(c.timestamp)}</span>
                     <span className={cn('font-semibold', statusTone(c.status_code, c.error))}>
-                      {c.error ? 'ERR' : (c.status_code ?? '—')}
+                      {c.status_code || (c.error ? 'ERR' : '—')}
                     </span>
                     <span className="ml-auto text-muted-foreground">
                       {c.duration_ms != null ? `${c.duration_ms}ms` : ''}

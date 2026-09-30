@@ -14,7 +14,7 @@ let _db: DatabaseSync | null = null
 function getDb(): DatabaseSync | null {
   if (_db) return _db
   // A readOnly open on a missing file throws, so bail early and treat the
-  // inspector as absent until the proxy has created the DB.
+  // inspector as absent until the proxy or the OTel ingester has created the DB.
   if (!fs.existsSync(DB_PATH)) return null
   _db = new DatabaseSync(DB_PATH, { readOnly: true })
   _db.exec('PRAGMA journal_mode = WAL')
@@ -47,6 +47,7 @@ function rowToSummary(r: CaptureRow): CaptureSummary {
     request_body_bytes: r.request_body_bytes,
     response_body_bytes: r.response_body_bytes,
     cc_version: r.cc_version,
+    source: r.source === 'otel' ? 'otel' : 'proxy',
   }
 }
 

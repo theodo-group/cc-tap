@@ -4,9 +4,11 @@
 // Copies .next/static, public/, and proxy/ into .next/standalone/ so that
 // `node .next/standalone/server.js` can serve a fully self-contained app.
 // Next emits .next/static and public alongside .next/standalone but does not
-// copy them in. The inspector proxy (proxy/server.js + schema.sql) is spawned
-// as a separate process from the standalone dir, so it must be copied in too —
-// Next's output tracing does not reliably include it (and never its schema.sql).
+// copy them in. Live Capture's OTel ingester (proxy/otel-ingest.js) and the
+// inspector proxy (proxy/server.js), with their shared modules and schema.sql,
+// are spawned as separate processes from the standalone dir, so they must be
+// copied in too — Next's output tracing does not reliably include them (and
+// never schema.sql).
 
 const fs   = require('fs')
 const path = require('path')
@@ -31,8 +33,8 @@ if (fs.existsSync(staticSrc)) {
 if (fs.existsSync(publicSrc)) {
   fs.cpSync(publicSrc, publicDst, { recursive: true, force: true })
 }
-// Ship the full proxy dir (server.js + schema.sql). The proxy uses Node's
-// built-in node:sqlite, so there's no native module to copy or resolve.
+// Ship the full proxy dir (both capture processes + schema.sql). They use
+// Node's built-in node:sqlite, so there's no native module to copy or resolve.
 if (fs.existsSync(proxySrc)) {
   fs.cpSync(proxySrc, proxyDst, { recursive: true, force: true })
 }

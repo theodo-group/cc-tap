@@ -59,7 +59,7 @@ function clearState(): void {
   try { fs.unlinkSync(PID_FILE) } catch { /* fine */ }
 }
 
-function isAlive(pid: number): boolean {
+export function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
     return true
@@ -97,7 +97,7 @@ export async function startProxy(): Promise<ProxyState> {
   }
 
   const port = await findFreePort(8089)
-  const script = resolveProxyScript()
+  const script = resolveProxyScript('server.js')
   if (!script) {
     throw new Error('proxy/server.js not found in cwd or ~/.cc-lens/')
   }
@@ -142,14 +142,15 @@ export function stopProxy(): { stopped: boolean; pid?: number } {
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-function resolveProxyScript(): string | null {
+/** Resolves a script under proxy/ (server.js, otel-ingest.js). */
+export function resolveProxyScript(file: string): string | null {
   // 1. cwd-relative (works for both `npm run dev` and `npx cc-tap` since
   //    bin/cli.js cd's into CACHE_DIR before spawning Next.)
-  const cwdPath = path.join(process.cwd(), 'proxy', 'server.js')
+  const cwdPath = path.join(process.cwd(), 'proxy', file)
   if (fs.existsSync(cwdPath)) return cwdPath
   // 2. CACHE_DIR fallback (defensive — covers the case where Next is started
   //    from elsewhere by an end user.)
-  const cachePath = path.join(ROOT, 'proxy', 'server.js')
+  const cachePath = path.join(ROOT, 'proxy', file)
   if (fs.existsSync(cachePath)) return cachePath
   return null
 }

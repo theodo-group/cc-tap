@@ -25,7 +25,14 @@ export interface CaptureRow {
   response_body_path: string | null
   request_body_bytes: number
   response_body_bytes: number | null
+  // NULL on rows written before the column existed (always the proxy then).
+  source?: string | null
 }
+
+// How a capture was recorded: through the local proxy, or ingested from the
+// bodies Claude Code logs itself (OTEL_LOG_RAW_API_BODIES), whose streamed
+// responses are re-serialized from the final message rather than wire SSE.
+export type CaptureSource = 'proxy' | 'otel'
 
 export interface CaptureSummary {
   request_id: string
@@ -48,6 +55,7 @@ export interface CaptureSummary {
   request_body_bytes: number
   response_body_bytes: number | null
   cc_version: string | null
+  source: CaptureSource
 }
 
 // A single content block as it appears in a request message or system entry.

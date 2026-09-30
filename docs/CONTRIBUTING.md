@@ -46,6 +46,16 @@ npm run build
 - Preserve compatibility with missing, partial, or malformed Claude Code files.
 - Avoid broad refactors unless they directly support the change.
 
+## Capture Equivalence Check
+
+When changing Live Capture (`proxy/`), or to check a new Claude Code release, run:
+
+```bash
+npm run test:equivalence
+```
+
+It runs the installed `claude` CLI against a local fake Anthropic API (no network, no API key; needs `openssl`), once without cc-tap and once per capture mode (OTel, proxy, proxy with `ENABLE_TOOL_SEARCH=true`), and checks that what cc-tap stores equals what Claude Code sends without it. OTel must be equivalent; the proxy's known differences are listed in `test/equivalence/equivalence.test.ts`. The report is written to `test-results/equivalence/equivalence-report.md`. It is opt-in and not part of `npm test`.
+
 ## Testing Changes Manually
 
 For parser or filesystem changes, test at least these cases:
