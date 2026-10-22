@@ -47,7 +47,7 @@ function StatTile({
           {label}
         </CardDescription>
         <CardTitle className="text-3xl font-bold tabular-nums leading-none" style={{ color }}>
-          {value}
+          <span key={value} className="t-num">{value}</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0">
@@ -67,7 +67,7 @@ export default function ActivityPage() {
   return (
     <div className="flex flex-col min-h-screen">
       <TopBar title="Activity" subtitle="Patterns, streaks, and peak hours" />
-      <div className="w-full space-y-4 p-4 md:p-6">
+      <div className="t-stagger-group w-full space-y-4 p-4 md:p-6">
 
         {error && (
           <Alert variant="destructive">

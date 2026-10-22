@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "build": {
+    "env": {
+      "CC_LENS_DEMO": "1"
+    }
+  },
+  "env": {
+    "CC_LENS_DEMO": "1"
+  }
+}

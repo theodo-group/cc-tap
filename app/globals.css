@@ -50,7 +50,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-mono);
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -101,26 +101,26 @@
 
 /* ─── Light theme (default) — higher contrast, clearer surfaces ─────────── */
 :root {
-  --radius: 0.375rem;
-  /* Zinc-based neutrals: page vs cards vs chrome read as distinct layers */
-  --background: #f4f4f5;
-  --foreground: #18181b;
+  --radius: 0.625rem;
+  /* Sharp, minimal light surface (Vercel/Linear-light): white cards, soft page, thin neutral borders */
+  --background: #f7f7f8;
+  --foreground: #131316;
   --card: #ffffff;
-  --card-foreground: #18181b;
+  --card-foreground: #131316;
   --popover: #ffffff;
-  --popover-foreground: #18181b;
+  --popover-foreground: #131316;
   --primary: #f97316;
   --primary-foreground: #ffffff;
-  --secondary: #e4e4e7;
-  --secondary-foreground: #27272a;
-  --muted: #ececee;
-  --muted-foreground: #52525b;
-  --accent: #e4e4e7;
-  --accent-foreground: #18181b;
+  --secondary: #f1f1f3;
+  --secondary-foreground: #131316;
+  --muted: #f3f3f5;
+  --muted-foreground: #62656c;
+  --accent: #f1f1f3;
+  --accent-foreground: #131316;
   --destructive: #dc2626;
-  --border: #d4d4d8;
+  --border: #e8e8eb;
   /* Input border token: visible edge on white fields */
-  --input: #d4d4d8;
+  --input: #e3e3e6;
   --ring: #f97316;
   --viz-sky: #1d4ed8;
   /* Tool / category colors (light) — saturated, distinct; SVG uses solid fill (no color-mix) */
@@ -143,35 +143,36 @@
   --chart-3: var(--viz-sky);
   --chart-4: #7c3aed;
   --chart-5: #d97706;
-  --sidebar: #fafafa;
+  --sidebar: #fbfbfc;
   --sidebar-foreground: #3f3f46;
   --sidebar-primary: #f97316;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e4e4e7;
-  --sidebar-accent-foreground: #18181b;
-  --sidebar-border: #d4d4d8;
+  --sidebar-accent: #f1f1f3;
+  --sidebar-accent-foreground: #131316;
+  --sidebar-border: #e8e8eb;
   --sidebar-ring: #f97316;
 }
 
 /* ─── Dark theme ─────────────────────────────────────────────────────────── */
 .dark {
-  --background: #0f1117;
-  --foreground: #e8eaed;
-  --card: #171921;
-  --card-foreground: #e8eaed;
-  --popover: #171921;
-  --popover-foreground: #e8eaed;
+  /* Linear-style dark: near-black page, clearly-lifted card surface, crisp borders, restrained orange */
+  --background: #0a0a0b;
+  --foreground: #f7f8f8;
+  --card: #1a1b1f;
+  --card-foreground: #f7f8f8;
+  --popover: #1f2024;
+  --popover-foreground: #f7f8f8;
   --primary: #d97706;
-  --primary-foreground: #0f1117;
-  --secondary: #1e212b;
-  --secondary-foreground: #d1d5db;
-  --muted: #1e212b;
-  --muted-foreground: #94a3b8;
-  --accent: #1e212b;
-  --accent-foreground: #e8eaed;
+  --primary-foreground: #0a0a0b;
+  --secondary: #232429;
+  --secondary-foreground: #e4e4e7;
+  --muted: #1f2024;
+  --muted-foreground: #9096a0;
+  --accent: #26272c;
+  --accent-foreground: #f7f8f8;
   --destructive: #f87171;
-  --border: #262a36;
-  --input: #1e212b;
+  --border: #2b2c31;
+  --input: #2b2c31;
   --ring: #d97706;
   --viz-sky: #60a5fa;
   --viz-tool-read: #60a5fa;
@@ -193,13 +194,13 @@
   --chart-3: var(--viz-sky);
   --chart-4: #a78bfa;
   --chart-5: #fbbf24;
-  --sidebar: #0b0d12;
-  --sidebar-foreground: #d1d5db;
+  --sidebar: #0c0c0e;
+  --sidebar-foreground: #b4b8bf;
   --sidebar-primary: #d97706;
-  --sidebar-primary-foreground: #0f1117;
-  --sidebar-accent: #1a1d26;
-  --sidebar-accent-foreground: #e8eaed;
-  --sidebar-border: #1a1d26;
+  --sidebar-primary-foreground: #0a0a0b;
+  --sidebar-accent: #1a1a1d;
+  --sidebar-accent-foreground: #f7f8f8;
+  --sidebar-border: #1c1c1f;
   --sidebar-ring: #d97706;
 }
 
@@ -209,17 +210,32 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-geist-mono), "JetBrains Mono", "Fira Code", "Consolas", monospace;
-    font-size: 15px;
+    font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+      "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.006em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  /* Numerals, costs, token counts, IDs read as data — keep them monospace */
+  .font-mono,
+  .tabular-nums {
+    font-family: var(--font-geist-mono), "JetBrains Mono", ui-monospace, monospace;
+    font-feature-settings: "tnum" 1;
   }
 }
 
-/* ─── Light mode: subtle depth on cards (matches orange-700 primary) ───── */
+/* ─── Card surface: sharp, minimal (Linear) — border-defined, whisper shadow ─── */
 :root:not(.dark) [data-slot="card"] {
   box-shadow:
-    0 1px 2px 0 rgba(24, 24, 27, 0.04),
-    0 4px 16px -2px rgba(249, 115, 22, 0.08),
-    0 0 0 1px rgba(24, 24, 27, 0.05);
+    0 1px 2px 0 rgba(19, 19, 22, 0.04),
+    0 1px 3px 0 rgba(19, 19, 22, 0.03);
+}
+.dark [data-slot="card"] {
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.03);
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────────── */
@@ -236,6 +252,268 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
+}
+
+/* ─── transitions.dev motion tokens ──────────────────────────────────────── */
+/* Semantic motion vocabulary shared by the dashboard's mount transitions.
+   Values track the transitions.dev tuning (page-side-by-side + texts-reveal +
+   number pop-in). Override here to retune every transition at once. */
+:root {
+  /* Page enter (whole-page blurred rise on navigation) */
+  --page-enter-dur: 320ms;
+  --page-enter-distance: 8px;
+  --page-enter-blur: 3px;
+  --page-enter-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Stagger group (sections that rise with rhythm) */
+  --stagger-dur: 480ms;
+  --stagger-step: 45ms;
+  --stagger-distance: 12px;
+  --stagger-blur: 3px;
+  --stagger-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Number pop-in (hero stat values) */
+  --num-dur: 560ms;
+  --num-distance: 10px;
+  --num-start-scale: 0.86;
+  --num-blur: 4px;
+  --num-ease: cubic-bezier(0.34, 1.56, 0.5, 1);
+  /* Icon swap (two icons cross-fading in one slot, e.g. theme sun/moon) */
+  --icon-swap-dur: 250ms;
+  --icon-swap-blur: 2px;
+  --icon-swap-start-scale: 0.25;
+  --icon-swap-ease: ease-in-out;
+  /* Shimmer text (in-progress label sweep). Colors track the theme so the
+     band reads on both light and dark surfaces. */
+  --shimmer-dur: 2000ms;
+  --shimmer-base: var(--muted-foreground);
+  --shimmer-highlight: var(--foreground);
+  --shimmer-band: 400%;
+  --shimmer-ease: linear;
+}
+
+/* Whole page rises + unblurs once on mount. Re-keyed per route so it replays
+   on every navigation. */
+@keyframes t-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--page-enter-distance));
+    filter: blur(var(--page-enter-blur));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+.t-page-enter {
+  animation: t-page-enter var(--page-enter-dur) var(--page-enter-ease) both;
+}
+
+/* Direct children of a stagger group rise in sequence. The eye lands on the
+   first card, then each following section follows by --stagger-step. */
+@keyframes t-stagger-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--stagger-distance));
+    filter: blur(var(--stagger-blur));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+.t-stagger-group > * {
+  animation: t-stagger-in var(--stagger-dur) var(--stagger-ease) both;
+}
+.t-stagger-group > *:nth-child(1) { animation-delay: calc(var(--stagger-step) * 0); }
+.t-stagger-group > *:nth-child(2) { animation-delay: calc(var(--stagger-step) * 1); }
+.t-stagger-group > *:nth-child(3) { animation-delay: calc(var(--stagger-step) * 2); }
+.t-stagger-group > *:nth-child(4) { animation-delay: calc(var(--stagger-step) * 3); }
+.t-stagger-group > *:nth-child(5) { animation-delay: calc(var(--stagger-step) * 4); }
+.t-stagger-group > *:nth-child(6) { animation-delay: calc(var(--stagger-step) * 5); }
+.t-stagger-group > *:nth-child(7) { animation-delay: calc(var(--stagger-step) * 6); }
+.t-stagger-group > *:nth-child(8) { animation-delay: calc(var(--stagger-step) * 7); }
+.t-stagger-group > *:nth-child(n + 9) { animation-delay: calc(var(--stagger-step) * 8); }
+
+/* Number re-enters with a blurred pop when its value changes (key remounts it).
+   The bouncy ease overshoots both the rise and the scale, so the figure springs
+   into place with a touch of weight instead of just fading in. */
+@keyframes t-num-pop {
+  from {
+    opacity: 0;
+    transform: translateY(var(--num-distance)) scale(var(--num-start-scale));
+    filter: blur(var(--num-blur));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+.t-num {
+  display: inline-block;
+  transform-origin: left center;
+  animation: t-num-pop var(--num-dur) var(--num-ease) both;
+}
+
+/* Two icons share one grid cell; flipping data-state cross-fades them with a
+   slight blur + scale so the active glyph grows in as the other shrinks out. */
+.t-icon-swap {
+  position: relative;
+  display: inline-grid;
+}
+.t-icon-swap .t-icon {
+  grid-area: 1 / 1;
+  transition:
+    opacity   var(--icon-swap-dur) var(--icon-swap-ease),
+    filter    var(--icon-swap-dur) var(--icon-swap-ease),
+    transform var(--icon-swap-dur) var(--icon-swap-ease);
+  will-change: opacity, filter, transform;
+}
+.t-icon-swap[data-state="a"] .t-icon[data-icon="a"],
+.t-icon-swap[data-state="b"] .t-icon[data-icon="b"] {
+  opacity: 1;
+  filter: blur(0);
+  transform: scale(1);
+}
+.t-icon-swap[data-state="a"] .t-icon[data-icon="b"],
+.t-icon-swap[data-state="b"] .t-icon[data-icon="a"] {
+  opacity: 0;
+  filter: blur(var(--icon-swap-blur));
+  transform: scale(var(--icon-swap-start-scale));
+}
+
+/* Loading label that sweeps a highlight band across muted text on a loop —
+   reads as "alive" without a spinner. Duplicate the visible string into
+   data-text so ::before can clip the gradient onto the same glyphs. */
+.t-shimmer {
+  position: relative;
+  display: inline-block;
+  color: var(--shimmer-base);
+}
+.t-shimmer::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    transparent          0%,
+    transparent         40%,
+    var(--shimmer-highlight) 50%,
+    transparent         60%,
+    transparent        100%
+  );
+  background-size: var(--shimmer-band) 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: t-shimmer var(--shimmer-dur) var(--shimmer-ease) infinite;
+}
+@keyframes t-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
+}
+
+/* Loading placeholder: a soft highlight sweeps across the block instead of the
+   flat opacity pulse, so waiting reads as "working" rather than "frozen". */
+@keyframes t-skeleton-sweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.t-skeleton {
+  background-color: var(--muted);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklab, var(--foreground) 9%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: t-skeleton-sweep 1.6s linear infinite;
+}
+
+/* Cards warm their edge and float a hair on hover — a quiet lift in attention.
+   The translate is compositor-only, so no surrounding layout shifts. */
+@media (hover: hover) {
+  [data-slot="card"] {
+    transition:
+      border-color 250ms var(--page-enter-ease),
+      box-shadow 250ms var(--page-enter-ease),
+      transform 250ms var(--page-enter-ease);
+  }
+  [data-slot="card"]:hover {
+    border-color: color-mix(in oklab, var(--border) 55%, var(--foreground) 14%);
+    box-shadow: 0 8px 24px -12px color-mix(in oklab, var(--foreground) 28%, transparent);
+    transform: translateY(-2px);
+  }
+}
+
+/* Toasts slide up + fade in, then fade back down on dismiss. */
+@keyframes t-toast-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.t-toast {
+  animation: t-toast-in 250ms var(--page-enter-ease) both;
+  transition:
+    opacity 200ms ease,
+    transform 200ms var(--page-enter-ease);
+}
+.t-toast.is-leaving {
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+}
+
+/* ─── Theme switch ───────────────────────────────────────────────────────── */
+/* Supporting browsers reveal the new theme as a circle expanding from the
+   toggle (driven in theme-provider via document.startViewTransition). The new
+   snapshot sits on top and is clipped open over the old one. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) { z-index: 0; }
+::view-transition-new(root) { z-index: 1; }
+
+/* Fallback for browsers without View Transitions: a brief global color
+   crossfade, enabled only while .theme-transition is on <html> then removed. */
+html.theme-transition,
+html.theme-transition * {
+  transition:
+    background-color 320ms var(--page-enter-ease),
+    border-color 320ms var(--page-enter-ease),
+    color 320ms var(--page-enter-ease) !important;
+}
+
+/* Respect users who asked the OS for less motion: drop the entrances entirely. */
+@media (prefers-reduced-motion: reduce) {
+  .t-page-enter,
+  .t-stagger-group > *,
+  .t-num,
+  .t-shimmer::before,
+  .t-skeleton {
+    animation: none !important;
+  }
+  [data-slot="card"],
+  .t-icon-swap .t-icon,
+  .t-toast {
+    transition: none !important;
+  }
+  .t-toast {
+    animation: none !important;
+  }
+  [data-slot="card"]:hover {
+    transform: none !important;
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
 }
 
 /* ─── Terminal glow utilities ────────────────────────────────────────────── */
@@ -259,7 +537,7 @@
 .recharts-text {
   fill: var(--muted-foreground) !important;
   font-family: var(--font-geist-mono), monospace !important;
-  font-size: 13px !important;
+  font-size: 12px !important;
 }
 
 /* Sidebar logo: water tap state animations. */

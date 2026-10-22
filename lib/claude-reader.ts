@@ -15,9 +15,9 @@ import { slugToPath } from '@/lib/decode'
 import { listSubagentFiles, readAgentMeta, type SubagentFile } from '@/lib/subagent-files'
 import { pruneScanCache, scanFile } from '@/lib/transcript-scan'
 import { mapPool, readJSONLLines } from '@/lib/jsonl'
-import { FALLBACK_MODEL } from '@/lib/pricing'
+import { FALLBACK_MODEL, estimateCostFromUsage, requestMultiplier } from '@/lib/pricing'
 import { LedgerBuilder, NO_MODEL, hasModeledTurns, ledgerMetrics, termsFlags, type TurnLedger } from '@/lib/session-ledger'
-import { ResponseTracker, oneHourWrite, responseKey } from '@/lib/response-usage'
+import { ResponseTracker, oneHourWrite, responseKey, type UsageFields } from '@/lib/response-usage'
 import { readCostState, reportedCost, type CostState } from '@/lib/reported-cost'
 
 export { mapPool, readJSONLLines }
@@ -104,10 +104,15 @@ export async function resolveProjectPath(slug: string): Promise<string> {
   return slugToPath(slug)
 }
 
-const CLAUDE_DIR = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude')
+// Resolved lazily (not cached at module load) so a CLAUDE_CONFIG_DIR set after
+// import — e.g. by the demo bootstrap in instrumentation.ts on a deploy — still
+// takes effect.
+function claudeDir(): string {
+  return process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude')
+}
 
 export function claudePath(...segments: string[]): string {
-  return path.join(CLAUDE_DIR, ...segments)
+  return path.join(claudeDir(), ...segments)
 }
 
 // ─── Stats Cache ─────────────────────────────────────────────────────────────
@@ -127,6 +132,7 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Se
   let startTime = ''
   let lastTime = ''
   const toolCounts: Record<string, number> = {}
+  const skillCounts: Record<string, number> = {}
   let firstPrompt = ''
   let hasTaskAgent = false
   let hasMcp = false
@@ -220,7 +226,7 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Se
           const content = msg?.content
           if (Array.isArray(content)) {
             for (const c of content) {
-              const item = c as { type?: string; name?: string }
+              const item = c as { type?: string; name?: string; input?: Record<string, unknown> }
               if (item.type === 'thinking') hasThinking = true
               if (item.type === 'tool_use' && item.name) {
                 turnToolCalls++
@@ -229,6 +235,12 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Se
                 if (item.name.startsWith('mcp__')) hasMcp = true
                 if (item.name === 'WebSearch') hasWebSearch = true
                 if (item.name === 'WebFetch') hasWebFetch = true
+                // Skill calls carry the invoked slash-command name in input.skill
+                // (e.g. Skill(skill="browse")). Track it as a first-class dimension.
+                if (item.name === 'Skill' && typeof item.input?.skill === 'string') {
+                  const skill = item.input.skill
+                  skillCounts[skill] = (skillCounts[skill] ?? 0) + 1
+                }
               }
             }
           }
@@ -271,6 +283,7 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Se
     user_message_count: m.user_message_count,
     assistant_message_count: m.assistant_message_count,
     tool_counts: toolCounts,
+    skill_counts: skillCounts,
     languages: {},
     git_commits: 0,
     git_pushes: 0,
@@ -960,6 +973,147 @@ export async function readMemories(): Promise<MemoryEntry[]> {
   return results.sort((a, b) => b.mtime.localeCompare(a.mtime))
 }
 
+// ─── Recent turns (for rolling usage windows) ──────────────────────────────────
+
+/** One assistant turn reduced to what the usage gauge needs: when it happened,
+ *  what it cost (API-equivalent), and its raw token split. */
+export interface UsageTurn {
+  ts: number
+  model: string
+  costUSD: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+}
+
+// Parsed turns are cached per file, keyed on mtime, so the frequently-polled
+// /api/usage endpoint only re-reads files written since the last scan. Cached
+// rows were filtered with an earlier (smaller) sinceMs; since sinceMs only
+// moves forward, every cached turn stays valid and the window math re-filters
+// by timestamp anyway, so reusing them can't admit stale data.
+const fileTurnsCache = new Map<string, { mtimeMs: number; turns: UsageTurn[] }>()
+
+function extractTurns(filePath: string, sinceMs: number): Promise<UsageTurn[]> {
+  const turns: UsageTurn[] = []
+  // A response spans several lines repeating its usage; each line contributes
+  // only what it adds over the response so far (lib/response-usage.ts)
+  const responses = new ResponseTracker()
+  return readJSONLLines(filePath, (obj) => {
+    if (obj.type !== 'assistant') return
+    const msg = (obj as { message?: { model?: string; usage?: UsageFields } }).message
+    if (!msg?.usage || !msg.model) return
+    const { delta } = responses.add(obj, msg.usage)
+    const ts = typeof obj.timestamp === 'string' ? Date.parse(obj.timestamp) : NaN
+    if (isNaN(ts) || ts < sinceMs) return
+    const inputTokens = delta.input_tokens ?? 0
+    const outputTokens = delta.output_tokens ?? 0
+    const cacheReadTokens = delta.cache_read_input_tokens ?? 0
+    const cacheWriteTokens = delta.cache_creation_input_tokens ?? 0
+    if (inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens === 0) return
+    // The request's terms and prompt length price everything it adds, growth lines included
+    const u = msg.usage
+    const prompt = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
+    const multiplier = requestMultiplier(msg.model, prompt, {
+      speed: typeof u.speed === 'string' ? u.speed : undefined,
+      inferenceGeo: typeof u.inference_geo === 'string' ? u.inference_geo : undefined,
+    })
+    turns.push({
+      ts,
+      model: msg.model,
+      costUSD: multiplier * estimateCostFromUsage(msg.model, {
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cache_creation_input_tokens: cacheWriteTokens,
+        cache_read_input_tokens: cacheReadTokens,
+        cache_creation: {
+          ephemeral_5m_input_tokens: delta.cache_creation?.ephemeral_5m_input_tokens ?? 0,
+          ephemeral_1h_input_tokens: oneHourWrite(delta),
+        },
+      }),
+      inputTokens,
+      outputTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+    })
+  }).then(() => turns)
+}
+
+/**
+ * Collect every assistant turn across all projects with a timestamp at or after
+ * `sinceMs`. Files whose mtime predates `sinceMs` can't hold a newer turn, so
+ * they're skipped without opening — this keeps a 7-day scan cheap even with a
+ * large ~/.claude/projects. Unlike getAllParsedSessions (which aggregates per
+ * file), this returns per-turn rows so callers can slice arbitrary time windows.
+ */
+export async function getRecentTurns(sinceMs: number): Promise<UsageTurn[]> {
+  const slugs = await listProjectSlugs().catch(() => [])
+  const turns: UsageTurn[] = []
+
+  await Promise.all(slugs.map(async (slug) => {
+    const files = await listProjectJSONLFiles(slug)
+    await mapPool(files, 16, async (filePath) => {
+      let mtimeMs: number
+      try {
+        mtimeMs = (await fs.stat(filePath)).mtimeMs
+      } catch {
+        fileTurnsCache.delete(filePath) // file vanished
+        return
+      }
+      if (mtimeMs < sinceMs) {
+        fileTurnsCache.delete(filePath) // aged out of the window for good
+        return
+      }
+      const cached = fileTurnsCache.get(filePath)
+      const fileTurns = cached && cached.mtimeMs === mtimeMs
+        ? cached.turns
+        : await extractTurns(filePath, sinceMs)
+      if (!cached || cached.mtimeMs !== mtimeMs) {
+        fileTurnsCache.set(filePath, { mtimeMs, turns: fileTurns })
+      }
+      for (const t of fileTurns) turns.push(t)
+    })
+  }))
+
+  turns.sort((a, b) => a.ts - b.ts)
+  return turns
+}
+
+// ─── Account info (~/.claude.json) ──────────────────────────────────────────────
+
+/** The subset of ~/.claude.json we use to auto-detect the plan for the usage
+ *  gauge. This file lives in $HOME, not under CLAUDE_CONFIG_DIR. */
+export interface ClaudeAccountInfo {
+  organizationType?: string      // e.g. "claude_pro", "claude_max"
+  rateLimitTier?: string         // e.g. "default_claude_ai"
+  hasExtraUsageEnabled?: boolean
+}
+
+export async function readAccountInfo(): Promise<ClaudeAccountInfo> {
+  // Normally this lives in $HOME, but the --demo dataset writes a fictional
+  // copy alongside its config dir, so prefer CLAUDE_CONFIG_DIR when it's set
+  // (keeps demo data isolated from the user's real ~/.claude.json).
+  const candidates = process.env.CLAUDE_CONFIG_DIR
+    ? [path.join(process.env.CLAUDE_CONFIG_DIR, '.claude.json'), path.join(os.homedir(), '.claude.json')]
+    : [path.join(os.homedir(), '.claude.json')]
+
+  for (const file of candidates) {
+    try {
+      const raw = await fs.readFile(file, 'utf-8')
+      const json = JSON.parse(raw) as { oauthAccount?: Record<string, unknown> }
+      const acct = json.oauthAccount ?? {}
+      return {
+        organizationType: typeof acct.organizationType === 'string' ? acct.organizationType : undefined,
+        rateLimitTier: typeof acct.organizationRateLimitTier === 'string' ? acct.organizationRateLimitTier : undefined,
+        hasExtraUsageEnabled: typeof acct.hasExtraUsageEnabled === 'boolean' ? acct.hasExtraUsageEnabled : undefined,
+      }
+    } catch {
+      // try the next candidate
+    }
+  }
+  return {}
+}
+
 // ─── Storage size ─────────────────────────────────────────────────────────────
 
 export async function getClaudeStorageBytes(): Promise<number> {
@@ -983,5 +1137,5 @@ export async function getClaudeStorageBytes(): Promise<number> {
     } catch { /* skip inaccessible dirs */ }
     return total
   }
-  return dirSize(CLAUDE_DIR)
+  return dirSize(claudeDir())
 }

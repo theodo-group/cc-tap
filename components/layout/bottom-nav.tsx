@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, MessageSquare, DollarSign,
-  FolderOpen, Activity, Moon, Sun,
+  Gauge, FolderOpen, Activity, Moon, Sun,
 } from 'lucide-react'
 import { useTheme } from '@/components/theme-provider'
 import { cn } from '@/lib/utils'
@@ -13,13 +13,14 @@ const NAV = [
   { href: '/',         label: 'Overview',  icon: LayoutDashboard },
   { href: '/sessions', label: 'Sessions',  icon: MessageSquare   },
   { href: '/costs',    label: 'Costs',     icon: DollarSign      },
+  { href: '/usage',    label: 'Usage',     icon: Gauge           },
   { href: '/projects', label: 'Projects',  icon: FolderOpen      },
   { href: '/activity', label: 'Activity',  icon: Activity        },
 ]
 
 export function BottomNav() {
   const pathname = usePathname()
-  const { theme, toggle } = useTheme()
+  const { theme, toggle, mounted } = useTheme()
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-sidebar border-t border-sidebar-border flex">
@@ -40,11 +41,18 @@ export function BottomNav() {
         )
       })}
       <button
-        onClick={toggle}
+        onClick={e => toggle({ x: e.clientX, y: e.clientY })}
         aria-label="Toggle theme"
         className="flex-1 flex flex-col items-center justify-center py-2.5 gap-1 transition-colors text-sidebar-foreground/40 hover:text-sidebar-foreground cursor-pointer"
       >
-        {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        {!mounted ? (
+          <span className="block w-4 h-4" aria-hidden />
+        ) : (
+          <span className="t-icon-swap" data-state={theme === 'dark' ? 'a' : 'b'}>
+            <Sun className="t-icon w-4 h-4" data-icon="a" />
+            <Moon className="t-icon w-4 h-4" data-icon="b" />
+          </span>
+        )}
         <span className="text-[10px] font-medium leading-none">Theme</span>
       </button>
     </nav>

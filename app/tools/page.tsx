@@ -4,16 +4,18 @@ import useSWR from 'swr'
 import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import { ToolRankingChart } from '@/components/tools/tool-ranking-chart'
+import { SkillRankingChart } from '@/components/tools/skill-ranking-chart'
 import { McpServerPanel } from '@/components/tools/mcp-server-panel'
 import { FeatureAdoptionTable } from '@/components/tools/feature-adoption-table'
 import { VersionHistoryTable } from '@/components/tools/version-history-table'
 import { CATEGORY_COLORS, CATEGORY_LABELS } from '@/lib/tool-categories'
 import type { ToolsAnalytics } from '@/types/claude'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AnimatedNumber } from '@/components/ui/animated-number'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { AlertTriangle, Wrench, Server, Zap, GitBranch } from 'lucide-react'
+import { AlertTriangle, Wrench, Server, Zap, GitBranch, Target } from 'lucide-react'
 
 const fetcher = (url: string) =>
   apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
@@ -24,7 +26,7 @@ export default function ToolsPage() {
   return (
     <div className="flex flex-col min-h-screen">
       <TopBar title="Tools & Features" subtitle="Every tool call, MCP server, and feature" />
-      <div className="p-6 space-y-6">
+      <div className="t-stagger-group p-6 space-y-6">
 
         {error && (
           <Alert variant="destructive">
@@ -52,7 +54,7 @@ export default function ToolsPage() {
                     <Zap className="w-4 h-4" /> Tool Calls
                   </CardDescription>
                   <CardTitle className="text-3xl font-bold tabular-nums text-[#d97706]">
-                    {data.total_tool_calls.toLocaleString()}
+                    <AnimatedNumber value={data.total_tool_calls} />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -66,7 +68,7 @@ export default function ToolsPage() {
                     <Wrench className="w-4 h-4" /> Unique Tools
                   </CardDescription>
                   <CardTitle className="text-3xl font-bold tabular-nums">
-                    {data.tools.length}
+                    <AnimatedNumber value={data.tools.length} />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -80,7 +82,7 @@ export default function ToolsPage() {
                     <Server className="w-4 h-4" /> MCP Servers
                   </CardDescription>
                   <CardTitle className="text-3xl font-bold tabular-nums text-[#34d399]">
-                    {data.mcp_servers.length}
+                    <AnimatedNumber value={data.mcp_servers.length} />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -94,7 +96,7 @@ export default function ToolsPage() {
                     <AlertTriangle className="w-4 h-4" /> Errors
                   </CardDescription>
                   <CardTitle className={`text-3xl font-bold tabular-nums ${data.total_errors > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
-                    {data.total_errors}
+                    <AnimatedNumber value={data.total_errors} />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -132,6 +134,27 @@ export default function ToolsPage() {
                 <ToolRankingChart tools={data.tools} />
               </CardContent>
             </Card>
+
+            {/* Skill (slash-command) usage */}
+            {data.skills.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle>Skill Usage</CardTitle>
+                      <CardDescription>
+                        {data.skills.length} {data.skills.length === 1 ? 'skill' : 'skills'} ·{' '}
+                        {data.skills.reduce((s, k) => s + k.total_calls, 0).toLocaleString()} invocations
+                      </CardDescription>
+                    </div>
+                    <Target className="w-4 h-4 text-muted-foreground mt-0.5" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <SkillRankingChart skills={data.skills} />
+                </CardContent>
+              </Card>
+            )}
 
             {/* MCP server details */}
             {data.mcp_servers.length > 0 && (
