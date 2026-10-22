@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# generated demo dataset (built on demand / at deploy time)
+/sample-data/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

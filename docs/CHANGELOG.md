@@ -11,8 +11,14 @@ This project follows a simple changelog format:
 
 ## Unreleased
 
+Syncs upstream [Arindam200/cc-lens](https://github.com/Arindam200/cc-lens) `main` (0.4.1 and later) into the cc-tap fork.
+
 ### Added
 
+- From upstream: skill (slash-command) invocations ranked on the Tools page, parsed from `Skill` tool calls.
+- From upstream: a usage headroom gauge for the 5-hour and 7-day windows, with reset pings and cap warnings. Its per-turn scan counts each API response once, like the rest of cc-tap.
+- From upstream: `--demo` mode with a sample dataset, served by default on hosted (Vercel) deploys.
+- From upstream: CLI flags `--host`, `--port`, `--help` and `--version`.
 - **Served under a path prefix.** `CC_TAP_BASE_PATH=/relay/cc-tap npm run build:dist` builds cc-tap for that prefix (Next's `basePath`), for a proxy that forwards it as-is: pages, assets, links and every API call stay under it, and the CLI opens the prefixed address and calls its own API there. Hand-written `fetch` calls, which Next does not prefix, go through `apiFetch` (`lib/base-path.ts`), and a lint rule refuses a bare `fetch` in client code. Without the variable nothing changes.
 - **Unpriced models are flagged rather than silently estimated.** A model with no price entry of its own used to be charged at another entry's rates without a word: the default `claude-opus-4-8` for an unknown id, or an older release's through the id prefix (`claude-opus-5-5` borrowing `claude-opus-5`). The Costs page now opens with an alert naming each such model and the rates used, marks it `est.` in the per-model table, and the session page's Cost card carries the same warning for the models that session used. Adding an entry keyed on the model id to `~/.cc-lens/pricing.json` clears it. The costs API reports it as `priced_as` on the model, the session API as `unpriced_models`.
 - **`--open <path>` on the CLI.** `npx cc-tap --open /sessions/<id>` opens the browser on that page rather than the overview, so a tool that hands cc-tap one session (a pulled Coder task, a link from a team dashboard) lands on it. The path reaches a shell (`open` / `start` / `xdg-open`), so only a plain app path is taken (`bin/open-path.js`); anything else is ignored with a warning.
@@ -45,6 +51,8 @@ This project follows a simple changelog format:
 
 ### Changed
 
+- From upstream: dashboard redesign with a Linear-style theme, mount transitions, and a reworked memory page and wrapped card.
+- From upstream: the CLI binds to `127.0.0.1` by default instead of reading the shell's `HOSTNAME`.
 - **A session's cost is the one Claude Code reports, when it reports one for the whole session.** Claude Code appends a `cost-state` line to the transcript when its process exits: `totalCostUSD` (the session, its sub-agents and Workflow agents included) and each model's `costUSD`, priced with the rates the running release ships. The table in `lib/pricing.ts` was off by a median 18 % per session against it (49 local sessions). That figure is now the session's cost, and each model's share of it, when the last such line covers every turn: no model call after it, none older than its `startTime` (a `--resume` keeps it; an earlier process that died without writing one does not), and `hasUnknownModelCost` false (`lib/reported-cost.ts`). The ledger spreads it over the turns in proportion to their table estimate, so a time window gets its share and the windows add up to it. Other sessions (running, killed, older Claude Code) keep the table's estimate and say so: `~` before the cost in the sessions table, "Estimated from the rate table" on the session page, and how many sessions are estimated on the Costs page. The unpriced-model warnings only count estimated sessions. Sessions carry the figure as `reported_cost`; every model's `costUSD` now holds its cost, and the costs APIs sum it rather than re-pricing tokens.
 
 - Pricing defaults refreshed for the Claude 5 generation: adds Fable 5.1 ($10/$50, cache reads $0.25/MTok instead of $1.00), Opus 5 ($5/$25) and Sonnet 5 ($2/$10). Fable 5.1 sessions were previously priced through the `claude-fable-5` prefix, so their cache-read cost drops 4x; a `~/.cc-lens/pricing.json` override keyed on `claude-fable-5` no longer covers 5.1 and needs its own `claude-fable-5-1` entry.
@@ -55,6 +63,7 @@ This project follows a simple changelog format:
 
 ### Fixed
 
+- From upstream: the cache-savings baseline prices cache-creation tokens at the input rate, not the cache-write rate, so "would have paid" and the savings figure are no longer inflated by the write premium.
 - **Opus 5.5 and Sonnet 5.5 show under their own names.** The labels matched ids by substring, so `claude-opus-5-5` hit the `opus-5` rule and showed as "Opus 5" (and `claude-sonnet-5-5` as "Sonnet 5") in the replay turn cards, overview donut, cost chart and token table. Labels are now parsed from the id by `lib/model-label.ts`, shared by all four, so later releases get the right name without a code change.
 - **Opus 5.5 is priced at its own $4 / $20 rate** (cache reads $0.20) instead of Opus 5's $5 / $25 through the `claude-opus-5` prefix, which overstated its cost by 25%. Sonnet 5.5 gets its own entry at the Sonnet 5 rate. The "short sessions ran on a premium model" insight now counts models from $4/MTok input, so Opus 5.5 sessions still qualify, and compares against Sonnet 5.5.
 - **1-hour cache writes are priced at 2× input**, not at the 5-minute rate (1.25×). Claude Code writes its main thread to the 1-hour cache, so every interactive session was underpriced: −20 % on Fable 5.1 over 49 sessions compared with the cost Claude Code itself reports. The TTL split (`cache_creation.ephemeral_1h_input_tokens`) is now kept per turn in the ledger and per model as `cacheCreation1hInputTokens`. A `pricing.json` entry can set `cacheWrite1h`; without it, 2× `input` applies. The Pricing Reference table shows both write rates.
