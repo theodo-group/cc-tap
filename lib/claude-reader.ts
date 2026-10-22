@@ -16,7 +16,7 @@ import { listSubagentFiles, readAgentMeta, type SubagentFile } from '@/lib/subag
 import { pruneScanCache, scanFile } from '@/lib/transcript-scan'
 import { mapPool, readJSONLLines } from '@/lib/jsonl'
 import { FALLBACK_MODEL, estimateCostFromUsage, requestMultiplier } from '@/lib/pricing'
-import { LedgerBuilder, NO_MODEL, hasModeledTurns, ledgerMetrics, termsFlags, type TurnLedger } from '@/lib/session-ledger'
+import { LedgerBuilder, NO_MODEL, flagsTerms, hasModeledTurns, ledgerMetrics, termsFlags, type TurnLedger } from '@/lib/session-ledger'
 import { ResponseTracker, oneHourWrite, responseKey, type UsageFields } from '@/lib/response-usage'
 import { readCostState, reportedCost, type CostState } from '@/lib/reported-cost'
 
@@ -247,7 +247,7 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Se
           const key = responseKey(obj)
           const turn = key === null ? undefined : turnOf.get(key)
           if (!isNew && turn !== undefined) {
-            ledger.growTurn(turn, { input: turnInput, output: turnOutput, cacheRead: turnCacheRead, cacheWrite: turnCacheWrite, cacheWrite1h: turnCacheWrite1h, toolCalls: turnToolCalls })
+            ledger.growTurn(turn, { input: turnInput, output: turnOutput, cacheRead: turnCacheRead, cacheWrite: turnCacheWrite, cacheWrite1h: turnCacheWrite1h, toolCalls: turnToolCalls, terms: termsFlags(msg?.usage) })
           } else if (ts) {
             const i = ledger.addTurn({
               ts: new Date(ts).getTime(),
@@ -997,28 +997,27 @@ const fileTurnsCache = new Map<string, { mtimeMs: number; turns: UsageTurn[] }>(
 function extractTurns(filePath: string, sinceMs: number): Promise<UsageTurn[]> {
   const turns: UsageTurn[] = []
   const responses = new ResponseTracker()
+  const requests = new Map<string, { flags: number; prompt: number; rows: { row: UsageTurn; base: number }[] }>()
   return readJSONLLines(filePath, (obj) => {
     if (obj.type !== 'assistant') return
     const msg = (obj as { message?: { model?: string; usage?: UsageFields } }).message
     if (!msg?.usage || !msg.model) return
     const { delta } = responses.add(obj, msg.usage)
+    const u = msg.usage
+    const key = responseKey(obj)
+    const request = (key === null ? undefined : requests.get(key)) ?? { flags: 0, prompt: 0, rows: [] }
+    if (key !== null) requests.set(key, request)
+    request.flags |= termsFlags(u)
+    request.prompt = Math.max(request.prompt, (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0))
     const ts = typeof obj.timestamp === 'string' ? Date.parse(obj.timestamp) : NaN
-    if (isNaN(ts) || ts < sinceMs) return
     const inputTokens = delta.input_tokens ?? 0
     const outputTokens = delta.output_tokens ?? 0
     const cacheReadTokens = delta.cache_read_input_tokens ?? 0
     const cacheWriteTokens = delta.cache_creation_input_tokens ?? 0
-    if (inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens === 0) return
-    const u = msg.usage
-    const prompt = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
-    const multiplier = requestMultiplier(msg.model, prompt, {
-      speed: typeof u.speed === 'string' ? u.speed : undefined,
-      inferenceGeo: typeof u.inference_geo === 'string' ? u.inference_geo : undefined,
-    })
-    turns.push({
-      ts,
-      model: msg.model,
-      costUSD: multiplier * estimateCostFromUsage(msg.model, {
+    if (!isNaN(ts) && ts >= sinceMs && inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens > 0) {
+      const row: UsageTurn = { ts, model: msg.model, costUSD: 0, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens }
+      turns.push(row)
+      request.rows.push({ row, base: estimateCostFromUsage(msg.model, {
         input_tokens: inputTokens,
         output_tokens: outputTokens,
         cache_creation_input_tokens: cacheWriteTokens,
@@ -1027,12 +1026,10 @@ function extractTurns(filePath: string, sinceMs: number): Promise<UsageTurn[]> {
           ephemeral_5m_input_tokens: delta.cache_creation?.ephemeral_5m_input_tokens ?? 0,
           ephemeral_1h_input_tokens: oneHourWrite(delta),
         },
-      }),
-      inputTokens,
-      outputTokens,
-      cacheReadTokens,
-      cacheWriteTokens,
-    })
+      }) })
+    }
+    const multiplier = requestMultiplier(msg.model, request.prompt, flagsTerms(request.flags))
+    for (const r of request.rows) r.row.costUSD = r.base * multiplier
   }).then(() => turns)
 }
 

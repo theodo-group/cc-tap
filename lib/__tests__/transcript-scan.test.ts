@@ -20,4 +20,14 @@ describe('scanTranscript pricing', () => {
     const cost = ledgerMetrics(ledger, null, 1).model_usage['claude-opus-5-5'].costUSD
     expect(cost).toBeCloseTo((10 * 4 + 20 * 20 + 1000 * 8) / 1_000_000 * 2)
   })
+
+  it('takes the request terms from a later line of the same response', () => {
+    const { speed: _speed, ...early } = usage
+    const { ledger } = scanTranscript([
+      { ...line, message: { ...line.message, usage: { ...early, output_tokens: 5 } } },
+      line,
+    ])
+    expect(ledger.ts.length).toBe(1)
+    expect(ledger.terms[0]).toBe(TERM_FAST)
+  })
 })

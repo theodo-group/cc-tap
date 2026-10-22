@@ -18,6 +18,7 @@ const lines = [
   line('2026-06-01T10:00:00.000Z', 'msg_1', { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 1000, cache_creation_input_tokens: 200, cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 } }),
   line('2026-06-01T10:00:01.000Z', 'msg_1', { input_tokens: 10, output_tokens: 80, cache_read_input_tokens: 1000, cache_creation_input_tokens: 200, cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 } }),
   line('2026-06-01T10:00:02.000Z', 'msg_1', { input_tokens: 10, output_tokens: 80, cache_read_input_tokens: 1000, cache_creation_input_tokens: 200, cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 } }),
+  line('2026-06-01T10:04:59.000Z', 'msg_2', { input_tokens: 3, output_tokens: 2 }),
   line('2026-06-01T10:05:00.000Z', 'msg_2', { input_tokens: 3, output_tokens: 7, speed: 'fast' }),
 ]
 
@@ -63,6 +64,7 @@ describe('getRecentTurns', () => {
     expect(turns.map(t => t.ts)).toEqual([
       Date.parse('2026-06-01T10:00:00.000Z'),
       Date.parse('2026-06-01T10:00:01.000Z'),
+      Date.parse('2026-06-01T10:04:59.000Z'),
       Date.parse('2026-06-01T10:05:00.000Z'),
     ])
   })

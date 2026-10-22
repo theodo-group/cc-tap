@@ -265,6 +265,16 @@ describe('request terms', () => {
     expect(ledgerCost(l, HAIKU)).toBeCloseTo(120_000 * read + 120_000 * read * 5)
   })
 
+  it('adds the terms a later line of a response carries', () => {
+    const b = new LedgerBuilder()
+    const i = b.addTurn({ ts: T0, model: OPUS, ...turn, output: 100 })
+    b.growTurn(i, { input: 0, output: 400, cacheRead: 0, cacheWrite: 0, toolCalls: 0, terms: TERM_FAST })
+    b.growTurn(i, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, toolCalls: 0 })
+    const l = b.build()
+    expect(l.terms[0]).toBe(TERM_FAST)
+    expect(ledgerMetrics(l, null, 1).model_usage[OPUS].costUSD).toBeCloseTo(base * 2)
+  })
+
   it('prices model-less turns of a ledger as the given model', () => {
     const b = new LedgerBuilder()
     b.addTurn({ ts: T0, model: NO_MODEL, ...turn, terms: TERM_FAST })

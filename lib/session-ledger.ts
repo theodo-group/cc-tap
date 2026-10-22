@@ -40,7 +40,7 @@ export function termsFlags(usage: Record<string, unknown> | undefined): number {
   return (usage?.speed === 'fast' ? TERM_FAST : 0) | (usage?.inference_geo === 'us' ? TERM_US : 0)
 }
 
-function flagsTerms(flags: number): RequestTerms {
+export function flagsTerms(flags: number): RequestTerms {
   return { speed: flags & TERM_FAST ? 'fast' : undefined, inferenceGeo: flags & TERM_US ? 'us' : undefined }
 }
 
@@ -91,7 +91,7 @@ export class LedgerBuilder {
   }
 
   /** Adds a later line of the same response to turn `i`: its token growth and its tool calls. */
-  growTurn(i: number, d: { input: number; output: number; cacheRead: number; cacheWrite: number; cacheWrite1h?: number; toolCalls: number }): void {
+  growTurn(i: number, d: { input: number; output: number; cacheRead: number; cacheWrite: number; cacheWrite1h?: number; toolCalls: number; terms?: number }): void {
     if (i < 0 || i >= this.ts.length) return
     this.input[i] += d.input
     this.output[i] += d.output
@@ -99,6 +99,7 @@ export class LedgerBuilder {
     this.cacheWrite[i] += d.cacheWrite
     this.cacheWrite1h[i] += d.cacheWrite1h ?? 0
     this.toolCalls[i] = Math.min(this.toolCalls[i] + d.toolCalls, 0xffff)
+    this.terms[i] |= d.terms ?? 0
   }
 
   addUser(ts: number): void {

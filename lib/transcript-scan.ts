@@ -264,7 +264,7 @@ export function scanTranscript(lines: AnyLine[]): TranscriptScan {
       const key = responseKey(l)
       const turn = key === null ? undefined : turnOf.get(key)
       if (!isNew && turn !== undefined) {
-        ledger.growTurn(turn, { input: added.input_tokens, output: added.output_tokens, cacheRead: added.cache_read_input_tokens, cacheWrite: added.cache_creation_input_tokens, cacheWrite1h: added.cache_creation.ephemeral_1h_input_tokens, toolCalls })
+        ledger.growTurn(turn, { input: added.input_tokens, output: added.output_tokens, cacheRead: added.cache_read_input_tokens, cacheWrite: added.cache_creation_input_tokens, cacheWrite1h: added.cache_creation.ephemeral_1h_input_tokens, toolCalls, terms: priced.success ? termsFlags(priced.data.usage) : 0 })
       } else if (ts && priced.success && priced.data.usage) {
         const i = ledger.addTurn({
           ts: new Date(ts).getTime(),
