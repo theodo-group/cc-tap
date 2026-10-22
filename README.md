@@ -182,10 +182,10 @@ To put cc-tap behind a proxy at a sub-path, build it for that prefix with `CC_TA
 
 ```bash
 CC_TAP_BASE_PATH=/relay/cc-tap npm run build:dist
-node bin/cli.js   # serves and opens http://localhost:3000/relay/cc-tap
+node bin/cli.js   # serves and opens http://127.0.0.1:3000/relay/cc-tap
 ```
 
-Pages, assets and API calls all live under the prefix, and nothing answers outside it, so the proxy forwards the path as-is rather than stripping it. The prefix is baked in at build time: the published npm package is built for the root, and a prefixed one is built from source.
+Pages, assets and API calls all live under the prefix, and outside it only `/` answers, with a redirect to the prefix, so the proxy forwards the path as-is rather than stripping it. The prefix is baked in at build time: the published npm package is built for the root, and a prefixed one is built from source.
 
 ### Lint
 

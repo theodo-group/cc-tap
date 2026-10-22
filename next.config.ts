@@ -15,6 +15,12 @@ const basePath = process.env.CC_TAP_BASE_PATH ?? '';
 const nextConfig: NextConfig = {
   basePath,
   env: { CC_TAP_BASE_PATH: basePath },
+  // A prefixed build answers nothing at the root, so send `/` to the prefix: a health check
+  // or bookmark on the bare port lands on the app. Next allows `basePath: false` here,
+  // unlike in a rewrite.
+  async redirects() {
+    return basePath ? [{ source: '/', destination: basePath, basePath: false, permanent: false }] : [];
+  },
   // Asked for rather than inherited: the session routes answer megabytes of
   // JSON, and a replay of 12 MB travels as 2.3 MB compressed.
   compress: true,

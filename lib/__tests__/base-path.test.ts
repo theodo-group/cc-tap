@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 async function fetchedUrl(basePath: string | undefined, path: string) {
   vi.resetModules()
-  if (basePath !== undefined) vi.stubEnv('CC_TAP_BASE_PATH', basePath)
+  vi.stubEnv('CC_TAP_BASE_PATH', basePath ?? '')
   const fetch = vi.fn(async () => new Response('{}'))
   vi.stubGlobal('fetch', fetch)
   const { apiFetch } = await import('../base-path')
