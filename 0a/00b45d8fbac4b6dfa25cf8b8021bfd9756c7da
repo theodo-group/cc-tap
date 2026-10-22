@@ -1,0 +1,46 @@
+lib/__tests__/transcript-scan.test.ts
+  s_ac31e07b2e980f::t_df1f87bf56241d 1-24
+lib/session-ledger.ts
+  s_ac31e07b2e980f::t_f066afc4453904 2,30,36-39,41-47,59,78-79,91,129,144,196,199,212-215,239-257,276-277,295-299,309-313
+  s_ac31e07b2e980f::t_8feb36575db4a4 40
+  s_ac31e07b2e980f::t_df6f1365dff67e 209-211,216-238
+types/claude.ts
+  s_ac31e07b2e980f::t_2cbb2164a43bfe 223-224
+lib/replay-parser.ts
+  s_ac31e07b2e980f::t_df6f1365dff67e 9,152
+lib/__tests__/session-ledger.test.ts
+  s_ac31e07b2e980f::t_282195c3f38b8a 2,223-273
+  s_ac31e07b2e980f::t_0ef1b609b12ced 274
+lib/transcript-scan.ts
+  s_ac31e07b2e980f::t_df1f87bf56241d 5,100-101,276
+docs/CHANGELOG.md
+  s_ac31e07b2e980f::t_4c68c0e6156df0 58-60
+lib/claude-reader.ts
+  s_ac31e07b2e980f::t_dd6dd5c81a4596 19,245
+lib/agent-timeline.ts
+  s_ac31e07b2e980f::t_df6f1365dff67e 415
+  s_ac31e07b2e980f::t_eccfa83d3149f8 4
+lib/pricing.ts
+  s_ac31e07b2e980f::t_169b3062ef52ee 12-15,21-23,29-37,44-45,52-53,60-63,70-71,75-79,88-90,126,131,134,142,190,195
+  s_ac31e07b2e980f::t_2cbb2164a43bfe 200,211-238
+  s_ac31e07b2e980f::t_5ebd0c0147ef1c 239
+lib/__tests__/pricing.test.ts
+  s_ac31e07b2e980f::t_282195c3f38b8a 23-24,142-200
+  s_ac31e07b2e980f::t_f2e4ee58a51bc9 201
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0a00b45d8fbac4b6dfa25cf8b8021bfd9756c7da",
+  "prompts": {},
+  "sessions": {
+    "s_ac31e07b2e980f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fddd819-5c4d-4052-a6a4-19d721be8afd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
