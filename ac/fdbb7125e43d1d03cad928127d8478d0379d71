@@ -1,0 +1,102 @@
+eslint.config.mjs
+  s_ac31e07b2e980f::t_bda8f40d1262aa 8-17
+next.config.ts
+  s_ac31e07b2e980f::t_bda8f40d1262aa 10-14,16-23
+components/sessions/raw-api/raw-api-tab.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 5,12
+app/insights/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 5,24,45
+app/costs/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 5,24
+app/tasks/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 6,12
+components/sessions/agents/agent-transcript.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 5,17
+app/activity/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 4,17
+lib/__tests__/read-base-path.test.ts
+  s_ac31e07b2e980f::t_bda8f40d1262aa 1-26
+components/sessions/agents/workflow-details-sheet.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 5,20
+components/global-search.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 16,51-54
+components/proxy/live-capture-button.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 6,18,59,68
+app/sessions/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 6,14
+app/workspace/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 4,18
+app/sessions/[id]/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 6,35
+app/tools/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 4,21
+app/overview-client.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 8,54
+components/sessions/context/context-tab.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 5,21,94
+lib/tool-filters.ts
+  s_ac31e07b2e980f::t_bda8f40d1262aa 4,55
+README.md
+  s_ac31e07b2e980f::t_bda8f40d1262aa 210-220
+app/memory/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 6,15,69
+components/sessions/context/agent-context-panel.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 5,14
+app/export/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 5,39,104,148,184
+app/usage/page.tsx
+  s_ac31e07b2e980f::t_0b41d90bd1c47d 15,44
+components/usage/usage-controls.tsx
+  s_ac31e07b2e980f::t_0b41d90bd1c47d 11,18
+components/usage/usage-pill.tsx
+  s_ac31e07b2e980f::t_0b41d90bd1c47d 9,11
+bin/read-base-path.js
+  s_ac31e07b2e980f::t_bda8f40d1262aa 1-13
+lib/__tests__/base-path.test.ts
+  s_ac31e07b2e980f::t_bda8f40d1262aa 1-26
+components/sessions/range-filter.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 7,26
+components/overview/live-sessions-panel.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 6,13
+components/costs/budget-alert-banner.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 5,12
+components/live/live-tail.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 6,27,139
+lib/base-path.ts
+  s_ac31e07b2e980f::t_bda8f40d1262aa 1-7
+app/projects/[slug]/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 6,28
+bin/cli.js
+  s_ac31e07b2e980f::t_bda8f40d1262aa 11,14-15,165,333
+app/settings/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 5,9
+app/team/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 7,19
+app/wrapped/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 5,19
+  s_ac31e07b2e980f::t_0b41d90bd1c47d 215
+app/history/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 5,16
+app/plans/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 5,11
+app/projects/page.tsx
+  s_ac31e07b2e980f::t_bda8f40d1262aa 5,18
+docs/CHANGELOG.md
+  s_ac31e07b2e980f::t_bda8f40d1262aa 22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "acfdbb7125e43d1d03cad928127d8478d0379d71",
+  "prompts": {},
+  "sessions": {
+    "s_ac31e07b2e980f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fddd819-5c4d-4052-a6a4-19d721be8afd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
