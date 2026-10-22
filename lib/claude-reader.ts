@@ -16,7 +16,7 @@ import { listSubagentFiles, readAgentMeta, type SubagentFile } from '@/lib/subag
 import { pruneScanCache, scanFile } from '@/lib/transcript-scan'
 import { mapPool, readJSONLLines } from '@/lib/jsonl'
 import { FALLBACK_MODEL } from '@/lib/pricing'
-import { LedgerBuilder, NO_MODEL, hasModeledTurns, ledgerMetrics, type TurnLedger } from '@/lib/session-ledger'
+import { LedgerBuilder, NO_MODEL, hasModeledTurns, ledgerMetrics, termsFlags, type TurnLedger } from '@/lib/session-ledger'
 import { ResponseTracker, oneHourWrite, responseKey } from '@/lib/response-usage'
 import { readCostState, reportedCost, type CostState } from '@/lib/reported-cost'
 
@@ -242,6 +242,7 @@ async function parseSessionFile(filePath: string, sessionId: string): Promise<Se
               model: msg?.model ?? NO_MODEL,
               input: turnInput, output: turnOutput, cacheRead: turnCacheRead, cacheWrite: turnCacheWrite, cacheWrite1h: turnCacheWrite1h,
               toolCalls: turnToolCalls,
+              terms: termsFlags(msg?.usage),
             })
             if (key !== null && i >= 0) turnOf.set(key, i)
           }

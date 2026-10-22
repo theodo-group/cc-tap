@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { LedgerBuilder, NO_MODEL, ledgerMetrics, metricTokens, sessionMetrics, sliceSession, summarizeRange, type LedgeredSession } from '@/lib/session-ledger'
+import { LedgerBuilder, NO_MODEL, TERM_FAST, TERM_US, ledgerCost, ledgerMetrics, metricTokens, sessionMetrics, sliceSession, summarizeRange, termsFlags, type LedgeredSession } from '@/lib/session-ledger'
 import { FALLBACK_MODEL, estimateTotalCostFromModel } from '@/lib/pricing'
 import type { SessionMeta, SessionSlice } from '@/types/claude'
 
@@ -218,5 +218,57 @@ describe('summarizeRange', () => {
     expect(summary.sessions).toBe(1)
     expect(summary.tokens).toBe(metricTokens(s))
     expect(summary.cost).toBe(s.estimated_cost)
+  })
+})
+
+describe('request terms', () => {
+  const OPUS = 'claude-opus-5-5'
+  const turn = { input: 1000, output: 500, cacheRead: 20_000, cacheWrite: 2000, toolCalls: 0 }
+  const base = estimateTotalCostFromModel(OPUS, {
+    inputTokens: 1000, outputTokens: 500, cacheReadInputTokens: 20_000, cacheCreationInputTokens: 2000, costUSD: 0, webSearchRequests: 0,
+  })
+
+  it('reads fast mode and US-only inference from a usage', () => {
+    expect(termsFlags({ speed: 'fast', inference_geo: 'us' })).toBe(TERM_FAST | TERM_US)
+    expect(termsFlags({ speed: 'standard', inference_geo: 'global' })).toBe(0)
+    expect(termsFlags(undefined)).toBe(0)
+  })
+
+  it('prices a fast turn at 2× and a US-only one at 1.1×, the rest at the table', () => {
+    const b = new LedgerBuilder()
+    b.addTurn({ ts: T0, model: OPUS, ...turn })
+    b.addTurn({ ts: T0 + MIN, model: OPUS, ...turn, terms: TERM_FAST })
+    b.addTurn({ ts: T0 + 2 * MIN, model: OPUS, ...turn, terms: TERM_US })
+    const m = ledgerMetrics(b.build(), null, 3)
+    expect(m.model_usage[OPUS].costUSD).toBeCloseTo(base * (1 + 2 + 1.1))
+    expect(m.estimated_cost).toBeCloseTo(base * 4.1)
+  })
+
+  it('keeps the terms through a fold, for agent costs too', () => {
+    const agent = new LedgerBuilder()
+    agent.addTurn({ ts: T0, model: OPUS, ...turn, terms: TERM_FAST, isAgent: true })
+    const b = new LedgerBuilder()
+    b.appendAgent(agent.build(), OPUS)
+    const m = ledgerMetrics(LedgerBuilder.from(b.build()).build(), null, 1)
+    expect(m.agents_cost).toBeCloseTo(base * 2)
+  })
+
+  it('prices a Haiku 5.5 turn by its own prompt length, not the session total', () => {
+    const HAIKU = 'claude-haiku-5-5'
+    const b = new LedgerBuilder()
+    // two 60K-token prompts: under the threshold each, over it together
+    b.addTurn({ ts: T0, model: HAIKU, input: 0, output: 0, cacheRead: 60_000, cacheWrite: 0, toolCalls: 0 })
+    b.addTurn({ ts: T0 + MIN, model: HAIKU, input: 0, output: 0, cacheRead: 60_000, cacheWrite: 0, toolCalls: 0 })
+    b.addTurn({ ts: T0 + 2 * MIN, model: HAIKU, input: 0, output: 0, cacheRead: 120_000, cacheWrite: 0, toolCalls: 0 })
+    const l = b.build()
+    const read = 0.01 / 1_000_000
+    expect(ledgerMetrics(l, null, 3).model_usage[HAIKU].costUSD).toBeCloseTo(120_000 * read + 120_000 * read * 5)
+    expect(ledgerCost(l, HAIKU)).toBeCloseTo(120_000 * read + 120_000 * read * 5)
+  })
+
+  it('prices model-less turns of a ledger as the given model', () => {
+    const b = new LedgerBuilder()
+    b.addTurn({ ts: T0, model: NO_MODEL, ...turn, terms: TERM_FAST })
+    expect(ledgerCost(b.build(), OPUS)).toBeCloseTo(base * 2)
   })
 })

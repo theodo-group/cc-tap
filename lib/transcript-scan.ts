@@ -2,7 +2,7 @@ import { stat } from 'fs/promises'
 import { z } from 'zod'
 import type { PromptTick, TimeSegment, TurnUsage } from '@/types/claude'
 import { readJSONLLines } from '@/lib/jsonl'
-import { LedgerBuilder, NO_MODEL, type TurnLedger } from '@/lib/session-ledger'
+import { LedgerBuilder, NO_MODEL, termsFlags, type TurnLedger } from '@/lib/session-ledger'
 import { ResponseTracker, oneHourWrite, responseKey, type UsageFields } from '@/lib/response-usage'
 import { resultText } from '@/lib/tool-search'
 import { parseWorkflowLaunchText } from '@/lib/workflow-runs'
@@ -97,7 +97,8 @@ const AssistantPricing = z.object({
     output_tokens: z.number().default(0),
     cache_read_input_tokens: z.number().default(0),
     cache_creation_input_tokens: z.number().default(0),
-  }).optional(),
+  // passthrough keeps the TTL split (cache_creation) and the request terms (speed, inference_geo)
+  }).passthrough().optional(),
 })
 
 const NOTIFICATION_RE = /<task-notification>[\s\S]*?<task-id>([^<]+)<\/task-id>[\s\S]*?<status>([^<]+)<\/status>/g
@@ -272,6 +273,7 @@ export function scanTranscript(lines: AnyLine[]): TranscriptScan {
           input: added.input_tokens, output: added.output_tokens,
           cacheRead: added.cache_read_input_tokens, cacheWrite: added.cache_creation_input_tokens, cacheWrite1h: added.cache_creation.ephemeral_1h_input_tokens,
           toolCalls,
+          terms: termsFlags(priced.data.usage),
         })
         if (key !== null && i >= 0) turnOf.set(key, i)
       }

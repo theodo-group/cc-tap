@@ -6,7 +6,7 @@ import type {
   TurnUsage,
   ToolCall,
 } from '@/types/claude'
-import { estimateCostFromUsage } from '@/lib/pricing'
+import { requestCost } from '@/lib/pricing'
 import { readJSONLLines } from '@/lib/jsonl'
 import { findRewinds } from '@/lib/agent-timeline'
 import { responseKey, responsesOf } from '@/lib/response-usage'
@@ -149,7 +149,7 @@ export async function parseSessionReplay(
       }
 
       const estimated_cost = model && usage
-        ? estimateCostFromUsage(model, usage)
+        ? requestCost(model, usage)
         : 0
 
       totalCost += estimated_cost

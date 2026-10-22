@@ -20,6 +20,8 @@ import {
   estimateCostFromUsage,
   estimateTotalCostFromModel,
   cacheEfficiency,
+  requestMultiplier,
+  requestCost,
 } from '@/lib/pricing'
 
 const MTOK = 1_000_000
@@ -134,6 +136,66 @@ describe('1-hour cache writes', () => {
 
   it('without a TTL split, are all 5-minute ones, as before', () => {
     expect(estimateCostFromUsage('claude-fable-5-1', { ...usage, cache_creation: undefined })).toBeCloseTo(12.5)
+  })
+})
+
+describe('rates as of 2026-10', () => {
+  it('reads Sonnet 5.5 cache hits at 0.05× input, like Opus 5.5', () => {
+    expect(getPricing('claude-sonnet-5-5').cacheRead * MTOK).toBeCloseTo(0.1)
+  })
+
+  it('prices Haiku 5.5 on its own entry, not at the fallback', () => {
+    const p = getPricing('claude-haiku-5-5')
+    expect(p.input * MTOK).toBeCloseTo(0.1)
+    expect(p.output * MTOK).toBeCloseTo(0.5)
+    expect(p.cacheWrite * MTOK).toBeCloseTo(0.125)
+    expect(p.cacheWrite1h * MTOK).toBeCloseTo(0.2)
+    expect(p.cacheRead * MTOK).toBeCloseTo(0.01)
+    expect(hasKnownPricing('claude-haiku-5-5')).toBe(true)
+  })
+
+  it('prices Mythos at Fable rates', () => {
+    expect(getPricing('claude-mythos-5-1').cacheRead * MTOK).toBeCloseTo(0.25)
+    expect(getPricing('claude-mythos-5').cacheRead * MTOK).toBeCloseTo(1)
+    expect(getPricing('claude-mythos-5-1').output * MTOK).toBeCloseTo(50)
+    expect(hasKnownPricing('claude-mythos-5-1')).toBe(true)
+  })
+})
+
+describe('requestMultiplier', () => {
+  it('doubles a fast-mode request on the models that have fast mode', () => {
+    expect(requestMultiplier('claude-opus-5-5', 0, { speed: 'fast' })).toBe(2)
+    expect(requestMultiplier('claude-opus-5', 0, { speed: 'fast' })).toBe(2)
+    expect(requestMultiplier('claude-opus-4-8', 0, { speed: 'fast' })).toBe(2)
+    expect(requestMultiplier('claude-sonnet-5-5', 0, { speed: 'fast' })).toBe(1)
+    expect(requestMultiplier('claude-opus-5-5', 0, { speed: 'standard' })).toBe(1)
+  })
+
+  it('adds 10% for US-only inference, on top of fast mode', () => {
+    expect(requestMultiplier('claude-sonnet-5-5', 0, { inferenceGeo: 'us' })).toBeCloseTo(1.1)
+    expect(requestMultiplier('claude-opus-5-5', 0, { speed: 'fast', inferenceGeo: 'us' })).toBeCloseTo(2.2)
+    expect(requestMultiplier('claude-opus-5-5', 0, { inferenceGeo: 'global' })).toBe(1)
+  })
+
+  it('bills a Haiku 5.5 prompt over 100K tokens at 5×', () => {
+    expect(requestMultiplier('claude-haiku-5-5', 100_000)).toBe(1)
+    expect(requestMultiplier('claude-haiku-5-5', 100_001)).toBe(5)
+    expect(requestMultiplier('claude-haiku-5-5', 100_001, { inferenceGeo: 'us' })).toBeCloseTo(5.5)
+    expect(requestMultiplier('claude-haiku-4-5', 500_000)).toBe(1)
+  })
+})
+
+describe('requestCost', () => {
+  it('counts cache reads and writes in the prompt length', () => {
+    // 1K fresh input, but 150K read from cache: the request is over the threshold
+    const usage: TurnUsage = { input_tokens: 1_000, output_tokens: 2_000, cache_read_input_tokens: 150_000, cache_creation_input_tokens: 0 }
+    expect(requestCost('claude-haiku-5-5', usage)).toBeCloseTo((1_000 * 0.5 + 2_000 * 2.5 + 150_000 * 0.05) / MTOK)
+  })
+
+  it('reads fast mode and US-only inference from the usage', () => {
+    const usage: TurnUsage = { input_tokens: MTOK, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, speed: 'fast', inference_geo: 'us' }
+    expect(requestCost('claude-opus-5-5', usage)).toBeCloseTo(8 * 1.1)
+    expect(estimateCostFromUsage('claude-opus-5-5', usage)).toBeCloseTo(4)
   })
 })
 
