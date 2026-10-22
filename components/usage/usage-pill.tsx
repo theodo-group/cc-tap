@@ -6,8 +6,9 @@ import { useEffect, useState } from 'react'
 import { Gauge } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { UsageResponse } from '@/app/usage/page'
+import { apiFetch } from '@/lib/base-path'
 
-const fetcher = (url: string) => fetch(url).then(r => { if (!r.ok) throw new Error(); return r.json() })
+const fetcher = (url: string) => apiFetch(url).then(r => { if (!r.ok) throw new Error(); return r.json() })
 
 function color(fraction: number) {
   if (fraction >= 0.9) return 'text-red-500'

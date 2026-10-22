@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { formatCost } from '@/lib/decode'
 import { cn } from '@/lib/utils'
 import { AlertTriangle, Gauge, TrendingUp, Info, Map, Clock, CalendarDays, Bell } from 'lucide-react'
+import { apiFetch } from '@/lib/base-path'
 
 export interface UsageResponse {
   now: number
@@ -40,7 +41,7 @@ export interface UsageResponse {
 }
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 /** Small bordered icon box used in every section header. */
 function IconChip({ children }: { children: React.ReactNode }) {

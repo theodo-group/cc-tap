@@ -1,6 +1,7 @@
 'use client'
 
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import { ToolRankingChart } from '@/components/tools/tool-ranking-chart'
 import { SkillRankingChart } from '@/components/tools/skill-ranking-chart'
@@ -17,7 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { AlertTriangle, Wrench, Server, Zap, GitBranch, Target } from 'lucide-react'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 export default function ToolsPage() {
   const { data, error, isLoading } = useSWR<ToolsAnalytics>('/api/tools', fetcher, { refreshInterval: 5_000 })

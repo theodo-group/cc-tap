@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import { formatCost } from '@/lib/decode'
 import { AnimatedNumber } from '@/components/ui/animated-number'
@@ -20,7 +21,7 @@ import {
 } from 'lucide-react'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 const SEVERITY_STYLES: Record<Insight['severity'], { badge: string; label: string }> = {
   high:   { badge: 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30',          label: 'High impact' },
@@ -41,7 +42,7 @@ function BudgetCard({ budget, onSaved }: {
     setSaving(true)
     setSaveError('')
     try {
-      const res = await fetch('/api/config', {
+      const res = await apiFetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ monthly_budget_usd: amount }),

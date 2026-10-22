@@ -8,13 +8,14 @@ import {
 } from '@/components/ui/select'
 import { Sparkles, RotateCcw } from 'lucide-react'
 import type { UsageResponse } from '@/app/usage/page'
+import { apiFetch } from '@/lib/base-path'
 
 const PLAN_LABELS: Record<string, string> = {
   pro: 'Pro', max5x: 'Max 5×', max20x: 'Max 20×', custom: 'Custom',
 }
 
 async function putConfig(updates: Record<string, unknown>) {
-  const res = await fetch('/api/config', {
+  const res = await apiFetch('/api/config', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),

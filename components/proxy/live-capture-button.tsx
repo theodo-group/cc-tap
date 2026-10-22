@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import { Radio, Copy, Check, Play, Square, Loader2 } from 'lucide-react'
+import { apiFetch } from '@/lib/base-path'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -14,7 +15,7 @@ interface ProxyStatus {
   startedAt?: number
 }
 
-const fetcher = (url: string) => fetch(url).then(r => r.json())
+const fetcher = (url: string) => apiFetch(url).then(r => r.json())
 
 function connectCommand(port: number): string {
   return `ENABLE_TOOL_SEARCH=true ANTHROPIC_BASE_URL=http://localhost:${port} claude`
@@ -55,7 +56,7 @@ export function LiveCaptureButton() {
   async function handleStart() {
     setBusy('start')
     try {
-      await fetch('/api/proxy/start', { method: 'POST' })
+      await apiFetch('/api/proxy/start', { method: 'POST' })
       await mutate()
     } finally {
       setBusy(null)
@@ -64,7 +65,7 @@ export function LiveCaptureButton() {
   async function handleStop() {
     setBusy('stop')
     try {
-      await fetch('/api/proxy/stop', { method: 'POST' })
+      await apiFetch('/api/proxy/stop', { method: 'POST' })
       await mutate()
     } finally {
       setBusy(null)

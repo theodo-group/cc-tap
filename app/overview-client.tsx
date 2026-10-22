@@ -5,6 +5,7 @@ import Link from 'next/link'
 import useSWR from 'swr'
 import { BarChart3, PieChart, Clock, ArrowRight, FolderGit2, MessagesSquare, Coins } from 'lucide-react'
 import { Delta, DeltaIcon, DeltaValue } from '@/components/delta'
+import { apiFetch } from '@/lib/base-path'
 import { UsageOverTimeChart } from '@/components/overview/usage-over-time-chart'
 import { ModelBreakdownDonut } from '@/components/overview/model-breakdown-donut'
 import { ProjectActivityDonut } from '@/components/overview/project-activity-donut'
@@ -50,7 +51,7 @@ type DatePreset = '7d' | '30d' | '90d'
 type CustomRange = DateRange
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => {
+  apiFetch(url).then(r => {
     if (!r.ok) throw new Error(`API error ${r.status}`)
     return r.json()
   })

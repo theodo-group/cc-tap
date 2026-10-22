@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import { ProjectCard } from '@/components/projects/project-card'
 import { ProjectTrends } from '@/components/projects/project-trends'
@@ -14,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Search, AlertTriangle, ArrowUpDown } from 'lucide-react'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 type SortKey = 'last_active' | 'estimated_cost' | 'session_count' | 'total_duration_minutes'
 type TrendRange = '7d' | '30d' | '90d'

@@ -2,10 +2,11 @@
 
 import useSWR from 'swr'
 import Link from 'next/link'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 function formatBytes(b: number) {
   if (b >= 1_073_741_824) return (b / 1_073_741_824).toFixed(2) + ' GB'

@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import useSWR, { mutate } from 'swr'
 import { Brain, FolderGit2, MessagesSquare, Clock3, Search, Pencil } from 'lucide-react'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -11,7 +12,7 @@ import type { MemoryEntry, MemoryType } from '@/lib/claude-reader'
 import { projectDisplayName, projectShortPath, formatRelativeDate } from '@/lib/decode'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 // ── Type config ───────────────────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ function MemoryCard({ entry, onClick, expanded }: { entry: MemoryEntry; onClick:
     setSaving(true)
     setSaveError(null)
     try {
-      const res = await fetch('/api/memory', {
+      const res = await apiFetch('/api/memory', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,6 +1,7 @@
 'use client'
 
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AnimatedNumber } from '@/components/ui/animated-number'
@@ -14,7 +15,7 @@ import {
 import type { SkillInfo, PluginInfo, ConfigFileInfo } from '@/lib/claude-reader'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 interface WorkspaceData {
   skills: SkillInfo[]

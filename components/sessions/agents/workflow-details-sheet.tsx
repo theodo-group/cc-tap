@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import type { AgentRun, CappedText, WorkflowRun, WorkflowRunDetail } from '@/types/claude'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -16,7 +17,7 @@ import { OUTCOME_COLORS, WORKFLOW_STATE_COLORS } from './agent-flame-chart'
 import { AlertTriangle, ExternalLink, Workflow as WorkflowIcon } from 'lucide-react'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 interface Props {
   sessionId: string
