@@ -187,7 +187,6 @@ describe('requestMultiplier', () => {
 
 describe('requestCost', () => {
   it('counts cache reads and writes in the prompt length', () => {
-    // 1K fresh input, but 150K read from cache: the request is over the threshold
     const usage: TurnUsage = { input_tokens: 1_000, output_tokens: 2_000, cache_read_input_tokens: 150_000, cache_creation_input_tokens: 0 }
     expect(requestCost('claude-haiku-5-5', usage)).toBeCloseTo((1_000 * 0.5 + 2_000 * 2.5 + 150_000 * 0.05) / MTOK)
   })

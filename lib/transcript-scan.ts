@@ -97,7 +97,6 @@ const AssistantPricing = z.object({
     output_tokens: z.number().default(0),
     cache_read_input_tokens: z.number().default(0),
     cache_creation_input_tokens: z.number().default(0),
-  // passthrough keeps the TTL split (cache_creation) and the request terms (speed, inference_geo)
   }).passthrough().optional(),
 })
 

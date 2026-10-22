@@ -256,7 +256,6 @@ describe('request terms', () => {
   it('prices a Haiku 5.5 turn by its own prompt length, not the session total', () => {
     const HAIKU = 'claude-haiku-5-5'
     const b = new LedgerBuilder()
-    // two 60K-token prompts: under the threshold each, over it together
     b.addTurn({ ts: T0, model: HAIKU, input: 0, output: 0, cacheRead: 60_000, cacheWrite: 0, toolCalls: 0 })
     b.addTurn({ ts: T0 + MIN, model: HAIKU, input: 0, output: 0, cacheRead: 60_000, cacheWrite: 0, toolCalls: 0 })
     b.addTurn({ ts: T0 + 2 * MIN, model: HAIKU, input: 0, output: 0, cacheRead: 120_000, cacheWrite: 0, toolCalls: 0 })

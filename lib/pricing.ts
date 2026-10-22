@@ -9,31 +9,27 @@ interface ModelPricing {
   /** 1-hour cache write; 2× input when an entry does not name it */
   cacheWrite1h?: number
   cacheRead: number
-  /** fast mode (`usage.speed: "fast"`) bills every rate at this multiple; no fast mode when absent */
   fast?: number
-  /** a request whose prompt (input + cache reads + cache writes) is over `tokens` bills every rate at `multiplier`× */
   longPrompt?: { tokens: number; multiplier: number }
 }
 
 // Vendored defaults — values are $ per million tokens. cacheWrite is the
 // 5-minute ephemeral rate; a 1-hour write costs 2× input on every model
 // (cacheWrite1h), and Claude Code writes its main thread to the 1-hour cache.
-// Fast mode, US-only inference and long Haiku 5.5 prompts multiply a whole
-// request (requestMultiplier). Users can override via ~/.cc-lens/pricing.json.
-// Source: platform.claude.com/docs/en/about-claude/pricing as of 2026-10.
+// Users can override via ~/.cc-lens/pricing.json. Source: claude.com/pricing
+// as of 2026-09.
 const DEFAULT_PRICING_PER_MTOK: Record<string, ModelPricing> = {
   // Fable 5.1 — $10 / $50, cache reads cut to $0.25 (vs 10% of input elsewhere)
   'claude-fable-5-1':  { input: 10.00, output: 50.00, cacheWrite: 12.50, cacheRead: 0.25 },
   // Fable 5 — $10 / $50
   'claude-fable-5':    { input: 10.00, output: 50.00, cacheWrite: 12.50, cacheRead: 1.00 },
-  // Mythos 5.1 / 5 (limited access) — Fable's rates
   'claude-mythos-5-1': { input: 10.00, output: 50.00, cacheWrite: 12.50, cacheRead: 0.25 },
   'claude-mythos-5':   { input: 10.00, output: 50.00, cacheWrite: 12.50, cacheRead: 1.00 },
-  // Opus 5.5 — $4 / $20, cache reads $0.20 (vs 10% of input elsewhere); fast mode $8 / $40
+  // Opus 5.5 — $4 / $20, cache reads $0.20 (vs 10% of input elsewhere)
   'claude-opus-5-5':   { input: 4.00, output: 20.00, cacheWrite: 5.00,  cacheRead: 0.20, fast: 2 },
-  // Opus 5 — $5 / $25; fast mode $10 / $50
+  // Opus 5 — $5 / $25
   'claude-opus-5':     { input: 5.00, output: 25.00, cacheWrite: 6.25,  cacheRead: 0.50, fast: 2 },
-  // Opus 4.x current generation — $5 / $25; 4.8 fast mode $10 / $50
+  // Opus 4.x current generation — $5 / $25
   'claude-opus-4-8':   { input: 5.00, output: 25.00, cacheWrite: 6.25,  cacheRead: 0.50, fast: 2 },
   'claude-opus-4-7':   { input: 5.00, output: 25.00, cacheWrite: 6.25,  cacheRead: 0.50 },
   'claude-opus-4-6':   { input: 5.00, output: 25.00, cacheWrite: 6.25,  cacheRead: 0.50 },
@@ -41,7 +37,7 @@ const DEFAULT_PRICING_PER_MTOK: Record<string, ModelPricing> = {
   // Opus 4.1 / 4.0 — legacy $15 / $75
   'claude-opus-4-1':   { input: 15.00, output: 75.00, cacheWrite: 18.75, cacheRead: 1.50 },
   'claude-opus-4':     { input: 15.00, output: 75.00, cacheWrite: 18.75, cacheRead: 1.50 },
-  // Sonnet 5.5 — $2 / $10, cache reads $0.10 (vs 10% of input elsewhere)
+  // Sonnet 5.5 — $2 / $10
   'claude-sonnet-5-5': { input: 2.00, output: 10.00, cacheWrite: 2.50,  cacheRead: 0.10 },
   // Sonnet 5 — $2 / $10
   'claude-sonnet-5':   { input: 2.00, output: 10.00, cacheWrite: 2.50,  cacheRead: 0.20 },
@@ -49,7 +45,6 @@ const DEFAULT_PRICING_PER_MTOK: Record<string, ModelPricing> = {
   'claude-sonnet-4-6': { input: 3.00, output: 15.00, cacheWrite: 3.75,  cacheRead: 0.30 },
   'claude-sonnet-4-5': { input: 3.00, output: 15.00, cacheWrite: 3.75,  cacheRead: 0.30 },
   'claude-sonnet-4':   { input: 3.00, output: 15.00, cacheWrite: 3.75,  cacheRead: 0.30 },
-  // Haiku 5.5 — $0.10 / $0.50, and $0.50 / $2.50 for a prompt over 100K tokens
   'claude-haiku-5-5':  { input: 0.10, output:  0.50, cacheWrite: 0.125, cacheRead: 0.01, longPrompt: { tokens: 100_000, multiplier: 5 } },
   // Haiku 4.5 — $1 / $5
   'claude-haiku-4-5':  { input: 1.00, output:  5.00, cacheWrite: 1.25,  cacheRead: 0.10 },
@@ -57,7 +52,6 @@ const DEFAULT_PRICING_PER_MTOK: Record<string, ModelPricing> = {
   'claude-haiku-3-5':  { input: 0.80, output:  4.00, cacheWrite: 1.00,  cacheRead: 0.08 },
 }
 
-/** Per-token rates; the request modifiers (fast, longPrompt) stay as they are */
 type TokenPricing = Required<Pick<ModelPricing, 'input' | 'output' | 'cacheWrite' | 'cacheWrite1h' | 'cacheRead'>> & Pick<ModelPricing, 'fast' | 'longPrompt'>
 
 function toPerToken(p: ModelPricing): TokenPricing {
@@ -197,7 +191,6 @@ function cacheWriteCost(p: TokenPricing, written: number, oneHour: number): numb
   return (written - hour) * p.cacheWrite + hour * p.cacheWrite1h
 }
 
-/** Usage at the table's rates, with no request modifier: see requestCost for one request */
 export function estimateCostFromUsage(model: string, usage: TurnUsage): number {
   const p = getPricing(model)
   return (
@@ -208,20 +201,13 @@ export function estimateCostFromUsage(model: string, usage: TurnUsage): number {
   )
 }
 
-/** US-only inference (`inference_geo: "us"`, Claude 4.6 and later) bills every rate at 1.1× */
 const US_INFERENCE = 1.1
 
-/** How a request was served, as its usage records it */
 export interface RequestTerms {
-  /** `usage.speed`: "fast" for fast mode */
   speed?: string
-  /** `usage.inference_geo`: "us" for US-only inference */
   inferenceGeo?: string
 }
 
-/** What one request costs as a multiple of the table's rates: fast mode, US-only
- *  inference, and a prompt over the model's long-prompt threshold. Every modifier
- *  applies to all of a request's tokens, cache reads and writes included. */
 export function requestMultiplier(model: string, promptTokens: number, terms: RequestTerms = {}): number {
   const p = getPricing(model)
   let m = 1
@@ -231,7 +217,6 @@ export function requestMultiplier(model: string, promptTokens: number, terms: Re
   return m
 }
 
-/** One request's cost: its usage at the table's rates, times its requestMultiplier */
 export function requestCost(model: string, usage: TurnUsage): number {
   const prompt = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0)
   return estimateCostFromUsage(model, usage) * requestMultiplier(model, prompt, { speed: usage.speed, inferenceGeo: usage.inference_geo })

@@ -14,8 +14,6 @@ function line(ts: string, id: string, usage: Record<string, unknown>) {
   return JSON.stringify({ type: 'assistant', timestamp: ts, requestId: 'req', message: { id, model: MODEL, usage, content: [] } })
 }
 
-// One response written as three lines (thinking, text, tool_use), the first
-// carrying an intermediate output count, then a second response in fast mode
 const lines = [
   line('2026-06-01T10:00:00.000Z', 'msg_1', { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 1000, cache_creation_input_tokens: 200, cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 } }),
   line('2026-06-01T10:00:01.000Z', 'msg_1', { input_tokens: 10, output_tokens: 80, cache_read_input_tokens: 1000, cache_creation_input_tokens: 200, cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 } }),
@@ -56,7 +54,6 @@ describe('getRecentTurns', () => {
         input_tokens: 10, output_tokens: 80, cache_read_input_tokens: 1000, cache_creation_input_tokens: 200,
         cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 },
       }) +
-      // fast mode doubles Opus 4.8's rates
       2 * estimateCostFromUsage(MODEL, { input_tokens: 3, output_tokens: 7, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 })
     expect(sum(t => t.costUSD)).toBeCloseTo(expected, 10)
   })

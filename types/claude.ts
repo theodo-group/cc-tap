@@ -222,7 +222,6 @@ export interface TurnUsage {
   }
   service_tier?: string
   inference_geo?: string
-  /** "fast" when the request ran in fast mode */
   speed?: string
 }
 

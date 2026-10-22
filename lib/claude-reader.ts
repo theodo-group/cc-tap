@@ -996,8 +996,6 @@ const fileTurnsCache = new Map<string, { mtimeMs: number; turns: UsageTurn[] }>(
 
 function extractTurns(filePath: string, sinceMs: number): Promise<UsageTurn[]> {
   const turns: UsageTurn[] = []
-  // A response spans several lines repeating its usage; each line contributes
-  // only what it adds over the response so far (lib/response-usage.ts)
   const responses = new ResponseTracker()
   return readJSONLLines(filePath, (obj) => {
     if (obj.type !== 'assistant') return
@@ -1011,7 +1009,6 @@ function extractTurns(filePath: string, sinceMs: number): Promise<UsageTurn[]> {
     const cacheReadTokens = delta.cache_read_input_tokens ?? 0
     const cacheWriteTokens = delta.cache_creation_input_tokens ?? 0
     if (inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens === 0) return
-    // The request's terms and prompt length price everything it adds, growth lines included
     const u = msg.usage
     const prompt = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
     const multiplier = requestMultiplier(msg.model, prompt, {

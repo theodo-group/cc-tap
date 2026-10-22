@@ -27,7 +27,7 @@ export interface TurnLedger {
   cacheWrite1h: Float64Array // the part of cacheWrite that went to the 1-hour cache, priced higher
   toolCalls: Uint16Array    // tool_use blocks in that turn
   isAgent: Uint8Array       // 1 when from a sub-agent transcript
-  terms: Uint8Array         // TERM_FAST | TERM_US: how the request was served, priced by requestMultiplier
+  terms: Uint8Array
   models: string[]
   /** orchestrator user message timestamps, ms */
   userTs: Float64Array
@@ -36,7 +36,6 @@ export interface TurnLedger {
 export const TERM_FAST = 1
 export const TERM_US = 2
 
-/** A usage's request terms as ledger flags */
 export function termsFlags(usage: Record<string, unknown> | undefined): number {
   return (usage?.speed === 'fast' ? TERM_FAST : 0) | (usage?.inference_geo === 'us' ? TERM_US : 0)
 }
@@ -75,7 +74,6 @@ export class LedgerBuilder {
   addTurn(t: {
     ts: number; model: string; input: number; output: number
     cacheRead: number; cacheWrite: number; cacheWrite1h?: number; toolCalls: number; isAgent?: boolean
-    /** termsFlags of the response's usage */
     terms?: number
   }): number {
     if (!Number.isFinite(t.ts)) return -1
@@ -206,7 +204,6 @@ function calibration(whole: Record<string, number>, reported: ReportedCost): ((m
   return model => (factor[model] ?? 1) * scale
 }
 
-/** Turn `i` at the table's rates */
 function turnEstimate(l: TurnLedger, i: number, model: string): number {
   return estimateTotalCostFromModel(model, {
     inputTokens: l.input[i], outputTokens: l.output[i], cacheReadInputTokens: l.cacheRead[i],
@@ -215,20 +212,15 @@ function turnEstimate(l: TurnLedger, i: number, model: string): number {
   })
 }
 
-/** Turn `i`'s requestMultiplier: its request terms, and its prompt length */
 function turnMultiplier(l: TurnLedger, i: number, model: string): number {
   return requestMultiplier(model, l.input[i] + l.cacheRead[i] + l.cacheWrite[i], flagsTerms(l.terms[i]))
 }
 
-/** What turn `i` costs over its table estimate: its request terms or a long
- *  prompt make the whole request dearer */
 function turnPremium(l: TurnLedger, i: number, model: string): number {
   const m = turnMultiplier(l, i, model)
   return m === 1 ? 0 : turnEstimate(l, i, model) * (m - 1)
 }
 
-/** A whole ledger's cost, each turn at its own model's rates and terms; turns
- *  without a model are priced as `unknownModel` */
 export function ledgerCost(l: TurnLedger, unknownModel: string): number {
   let total = 0
   for (let i = 0; i < l.ts.length; i++) {
@@ -238,19 +230,17 @@ export function ledgerCost(l: TurnLedger, unknownModel: string): number {
   return total
 }
 
-/** Each model's cost before calibration: the table's estimate of its tokens plus its turns' premiums */
 function estimates(usage: Record<string, ModelUsage>, premium: Record<string, number>): Record<string, number> {
   const out: Record<string, number> = {}
   for (const [model, u] of Object.entries(usage)) out[model] = estimateTotalCostFromModel(model, u) + (premium[model] ?? 0)
   return out
 }
 
-/** Sets costUSD on every model of `usage`: its estimate, times `scale` */
+/** Sets costUSD on every model of `usage`: the table's estimate, times `scale` */
 function price(usage: Record<string, ModelUsage>, estimate: Record<string, number>, scale: (model: string) => number): void {
   for (const [model, u] of Object.entries(usage)) u.costUSD = (estimate[model] ?? 0) * scale(model)
 }
 
-/** Each model's costUSD, from usage priced without calibration */
 function costsOf(usage: Record<string, ModelUsage>): Record<string, number> {
   const out: Record<string, number> = {}
   for (const [model, u] of Object.entries(usage)) out[model] = u.costUSD

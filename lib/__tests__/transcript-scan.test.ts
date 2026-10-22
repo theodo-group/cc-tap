@@ -17,7 +17,6 @@ describe('scanTranscript pricing', () => {
     const { ledger } = scanTranscript([line])
     expect(ledger.cacheWrite1h[0]).toBe(1000)
     expect(ledger.terms[0]).toBe(TERM_FAST)
-    // 1-hour write at 2× input, the whole request at fast mode's 2×
     const cost = ledgerMetrics(ledger, null, 1).model_usage['claude-opus-5-5'].costUSD
     expect(cost).toBeCloseTo((10 * 4 + 20 * 20 + 1000 * 8) / 1_000_000 * 2)
   })
