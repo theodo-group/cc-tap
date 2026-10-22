@@ -1,0 +1,167 @@
+lib/claude-reader.ts
+  s_ac31e07b2e980f::t_04b47b32fd133e 1014-1024,1038,1075
+  s_ac31e07b2e980f::t_5dcd4551d35fa9 1011-1013
+  s_ac31e07b2e980f::t_207b53216ce369 1025-1027,1035-1037
+  s_ac31e07b2e980f::t_229644f5d7982d 1039-1041,1072-1074
+  s_ac31e07b2e980f::t_c252a0d0aadb62 1076-1078
+.gitignore
+  s_ac31e07b2e980f::t_595cc6a6ba8ace 39-41
+README.md
+  s_ac31e07b2e980f::t_26fc7020d4579f 146-170,204-209,221,225,234,258-265
+app/activity/page.tsx
+  s_ac31e07b2e980f::t_1827b60f2a36bb 50,70
+app/api/config/route.ts
+  s_ac31e07b2e980f::t_f215a70c5c1c79 2,28-59
+app/api/memory/route.ts
+  s_ac31e07b2e980f::t_674cb132a8bf58 4,35,37-38
+app/api/tools/route.ts
+  s_ac31e07b2e980f::t_6287859965ce13 5,19-20,45-51,72-80,168
+app/api/usage/route.ts
+  s_ac31e07b2e980f::t_cdf0d6e515bf4b 1-58
+app/costs/page.tsx
+  s_ac31e07b2e980f::t_4e0116bb20c5ca 14,35,67,86,100
+app/export/page.tsx
+  s_ac31e07b2e980f::t_1280cab8d0e05b 22,60,123,125-127,167,169-171,217
+app/globals.css
+  s_ac31e07b2e980f::t_e231b09c09f302 53,104-107,109,111,114-119,121,123,146,150-152,158-164,166-172,174-175,197-198,200-203,213-225,229,232-238,257-518,540
+app/history/page.tsx
+  s_ac31e07b2e980f::t_507c2a20edba4d 60
+app/insights/page.tsx
+  s_ac31e07b2e980f::t_0b776a62f72f59 8,72,126,173,180,187
+app/layout.tsx
+  s_ac31e07b2e980f::t_543f0947855359 2,10-15,28-42,44,46-61,72,74-83
+app/memory/page.tsx
+  s_ac31e07b2e980f::t_279faa696bf5c0 5,8-10,34,45,107,109,111,114-124,141-143,145,147-148,154,159,164,173,179,182-187,194,198,204,210,212-225,282-283,285,294-298,306-309,312-351,353-358,365,372
+app/overview-client.tsx
+  s_ac31e07b2e980f::t_9654bf10d89819 4,6-7,16,19,342-343,346,376-377,381,390,399-400,409-410,417-418,420-430,435-437,450-451,453-454,456,458-460,473,476-477,481-483,491,493-494,498-500,506-513,520-528,571-581,583,586-593
+app/projects/[slug]/page.tsx
+  s_ac31e07b2e980f::t_69fcc98f397a31 9,132,144,157,171
+app/projects/page.tsx
+  s_ac31e07b2e980f::t_022bb038191485 70
+app/tasks/page.tsx
+  s_ac31e07b2e980f::t_22ce5be0cc9d52 143
+app/team/page.tsx
+  s_ac31e07b2e980f::t_02280fe2e0964a 73
+app/tools/page.tsx
+  s_ac31e07b2e980f::t_501a56ac4c040e 7,14,18,29,57,71,85,99,138-158
+app/usage/page.tsx
+  s_ac31e07b2e980f::t_7d0f47cc7eccda 1-285
+app/workspace/page.tsx
+  s_ac31e07b2e980f::t_14cc4a94fde02e 7,42
+app/wrapped/page.tsx
+  s_ac31e07b2e980f::t_4addbc3e30efc1 3,10,14-16,24-55,72-94,113-124,141-143,151-155,158,162-174,176-181,183,194-195,203-238,280,300,310-389
+bin/cli.js
+  s_ac31e07b2e980f::t_c6189feb99fea9 49-56,61,65-66,70-121,301-305,315-322,326-332
+bin/generate-sample.js
+  s_ac31e07b2e980f::t_681c944ab0d5ef 1-466
+components.json
+  s_ac31e07b2e980f::t_4b632096ddabce 22-24
+components/delta.tsx
+  s_ac31e07b2e980f::t_7d9fc640263956 1-181
+components/layout/bottom-nav.tsx
+  s_ac31e07b2e980f::t_80da82441dfa92 7,16,23,44,48-55
+components/layout/client-layout.tsx
+  s_ac31e07b2e980f::t_1fcd8a0b60d22e 3,6,8,17-37
+components/layout/sidebar.tsx
+  s_ac31e07b2e980f::t_b5d07a50a9c3aa 8,23,46,48-49,51-52,55-71,95,102-105,152,156-163
+components/layout/top-bar.tsx
+  s_ac31e07b2e980f::t_e2a8ea4a387842 10-11,34,50-62,87-89,133-139
+components/overview/stat-card.tsx
+  s_ac31e07b2e980f::t_f974e08cd433fb 4-6,11,13-16,38,50-53,55-58,61-71,73,76-79,84,86,90-93
+components/projects/project-card.tsx
+  s_ac31e07b2e980f::t_4cf9f657a00892 9,54,58-61,64-66,69-78,84,86,91-92,96-97,101-107,109,114-119,122,124-145,153-163
+components/theme-provider.tsx
+  s_ac31e07b2e980f::t_441909e84cfcd7 7-18,21,29-42,48-52,54-58,60-101,103-104,108
+components/tools/skill-ranking-chart.tsx
+  s_ac31e07b2e980f::t_611e52f105fd6a 1-39
+components/ui/animated-number.tsx
+  s_ac31e07b2e980f::t_7925532e5e4f46 1-75
+components/ui/badge.tsx
+  s_ac31e07b2e980f::t_4d42c56c3a743d 8,16
+components/ui/button.tsx
+  s_ac31e07b2e980f::t_0ebee72ec70427 8,14,16,26
+components/ui/card.tsx
+  s_ac31e07b2e980f::t_49e8c84d2eba80 10,45
+components/ui/input.tsx
+  s_ac31e07b2e980f::t_76ed1920464db5 11
+components/ui/select.tsx
+  s_ac31e07b2e980f::t_2f3e3b2951767f 40,65,97,112,137
+components/ui/separator.tsx
+  s_ac31e07b2e980f::t_88d324a65fab35 20
+components/ui/sheet.tsx
+  s_ac31e07b2e980f::t_425beb1f3504c1 39,63,65,67,69,71,78,115,128
+components/ui/skeleton.tsx
+  s_ac31e07b2e980f::t_96fdc1bc51bec7 7
+components/ui/table.tsx
+  s_ac31e07b2e980f::t_1c7cb48d8bf98b 47,60,73,101
+components/ui/tabs.tsx
+  s_ac31e07b2e980f::t_7ade9168198c7c 46,50-90,93,96,98-112,124,126
+components/ui/toast.tsx
+  s_ac31e07b2e980f::t_f0ec56d525e2c6 1-129
+components/ui/tooltip.tsx
+  s_ac31e07b2e980f::t_bae8dd92501dc5 45,51
+components/usage/usage-alerts.tsx
+  s_ac31e07b2e980f::t_0d3df96783be03 1-124
+components/usage/usage-controls.tsx
+  s_ac31e07b2e980f::t_fae23e190af358 1-183
+components/usage/usage-gauge.tsx
+  s_ac31e07b2e980f::t_d6fddf1e0804b6 1-124
+components/usage/usage-pill.tsx
+  s_ac31e07b2e980f::t_a3fac1272ea5ce 1-61
+docs/BUILD-IN-PUBLIC.md
+  s_ac31e07b2e980f::t_517e3abb3bb758 1-283
+docs/CHANGELOG.md
+  s_ac31e07b2e980f::t_9b359e3482fac4 14-15,18-21,54-55,66,68
+docs/LIMITATIONS.md
+  s_ac31e07b2e980f::t_9012d0918bf826 29
+docs/PRIVACY.md
+  s_ac31e07b2e980f::t_57897a12584d38 33
+docs/SECURITY.md
+  s_ac31e07b2e980f::t_8b7a6443d7b233 32
+docs/TEAM.md
+  s_ac31e07b2e980f::t_4fe5b24556ec88 42
+instrumentation.ts
+  s_ac31e07b2e980f::t_933eafa5d418b3 1-9
+lib/__tests__/pricing.test.ts
+  s_ac31e07b2e980f::t_e7747b307638b7 248-264
+lib/__tests__/recent-turns.test.ts
+  s_ac31e07b2e980f::t_4ba7ed075a8280 1-72
+lib/__tests__/usage-alerts.test.ts
+  s_ac31e07b2e980f::t_dfac465b895a6a 1-73
+lib/config.ts
+  s_ac31e07b2e980f::t_99c5566a3a17c0 9-12,16-43,61-72,94-113
+lib/demo-data.ts
+  s_ac31e07b2e980f::t_c550aa30f48fd9 1-34
+lib/pricing.ts
+  s_ac31e07b2e980f::t_46b37049aae724 257-261,263-264
+lib/usage-alerts.ts
+  s_ac31e07b2e980f::t_8b9a540c81ac0b 1-74
+lib/usage-windows.ts
+  s_ac31e07b2e980f::t_a15b0008ea20d0 1-171
+next.config.ts
+  s_ac31e07b2e980f::t_abb00b0fac850c 41-45
+package-lock.json
+  s_ac31e07b2e980f::t_aae55c91502377 24
+package.json
+  s_ac31e07b2e980f::t_4bfe21ef3e820b 62
+types/claude.ts
+  s_ac31e07b2e980f::t_5676e8799559e1 69-70,354-359,376
+vercel.json
+  s_ac31e07b2e980f::t_217af50075bcfd 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9f425e1ff86b0cce5af78677bffcceae0b9d4365",
+  "prompts": {},
+  "sessions": {
+    "s_ac31e07b2e980f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fddd819-5c4d-4052-a6a4-19d721be8afd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
