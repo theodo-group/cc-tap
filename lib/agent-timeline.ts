@@ -1,7 +1,7 @@
 import path from 'path'
 import { stat } from 'fs/promises'
 import type { AgentOutcome, AgentRun, AgentTimeline, ContextEvent, WorkflowAgentState, WorkflowPhase, WorkflowRun } from '@/types/claude'
-import { estimateCostFromUsage } from '@/lib/pricing'
+import { ledgerCost } from '@/lib/session-ledger'
 import { mapPool } from '@/lib/jsonl'
 import {
   emptyUsage, readLines, scanFile, scanTranscript,
@@ -412,7 +412,7 @@ export async function parseAgentTimeline(
       duration_ms: Math.max(0, new Date(durationEnd).getTime() - new Date(start).getTime()),
       turns: r.scan.assistantCount,
       usage: r.scan.usage,
-      estimated_cost: estimateCostFromUsage(r.scan.model ?? model ?? main.model ?? '', r.scan.usage),
+      estimated_cost: ledgerCost(r.scan.ledger, r.scan.model ?? model ?? main.model ?? ''),
       outcome,
       nudges: (nudges.get(r.id) ?? []).sort(),
       launch_tool_use_id: r.meta.toolUseId,

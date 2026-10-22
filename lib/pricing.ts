@@ -9,6 +9,8 @@ interface ModelPricing {
   /** 1-hour cache write; 2× input when an entry does not name it */
   cacheWrite1h?: number
   cacheRead: number
+  fast?: number
+  longPrompt?: { tokens: number; multiplier: number }
 }
 
 // Vendored defaults — values are $ per million tokens. cacheWrite is the
@@ -21,12 +23,14 @@ const DEFAULT_PRICING_PER_MTOK: Record<string, ModelPricing> = {
   'claude-fable-5-1':  { input: 10.00, output: 50.00, cacheWrite: 12.50, cacheRead: 0.25 },
   // Fable 5 — $10 / $50
   'claude-fable-5':    { input: 10.00, output: 50.00, cacheWrite: 12.50, cacheRead: 1.00 },
+  'claude-mythos-5-1': { input: 10.00, output: 50.00, cacheWrite: 12.50, cacheRead: 0.25 },
+  'claude-mythos-5':   { input: 10.00, output: 50.00, cacheWrite: 12.50, cacheRead: 1.00 },
   // Opus 5.5 — $4 / $20, cache reads $0.20 (vs 10% of input elsewhere)
-  'claude-opus-5-5':   { input: 4.00, output: 20.00, cacheWrite: 5.00,  cacheRead: 0.20 },
+  'claude-opus-5-5':   { input: 4.00, output: 20.00, cacheWrite: 5.00,  cacheRead: 0.20, fast: 2 },
   // Opus 5 — $5 / $25
-  'claude-opus-5':     { input: 5.00, output: 25.00, cacheWrite: 6.25,  cacheRead: 0.50 },
+  'claude-opus-5':     { input: 5.00, output: 25.00, cacheWrite: 6.25,  cacheRead: 0.50, fast: 2 },
   // Opus 4.x current generation — $5 / $25
-  'claude-opus-4-8':   { input: 5.00, output: 25.00, cacheWrite: 6.25,  cacheRead: 0.50 },
+  'claude-opus-4-8':   { input: 5.00, output: 25.00, cacheWrite: 6.25,  cacheRead: 0.50, fast: 2 },
   'claude-opus-4-7':   { input: 5.00, output: 25.00, cacheWrite: 6.25,  cacheRead: 0.50 },
   'claude-opus-4-6':   { input: 5.00, output: 25.00, cacheWrite: 6.25,  cacheRead: 0.50 },
   'claude-opus-4-5':   { input: 5.00, output: 25.00, cacheWrite: 6.25,  cacheRead: 0.50 },
@@ -34,27 +38,37 @@ const DEFAULT_PRICING_PER_MTOK: Record<string, ModelPricing> = {
   'claude-opus-4-1':   { input: 15.00, output: 75.00, cacheWrite: 18.75, cacheRead: 1.50 },
   'claude-opus-4':     { input: 15.00, output: 75.00, cacheWrite: 18.75, cacheRead: 1.50 },
   // Sonnet 5.5 — $2 / $10
-  'claude-sonnet-5-5': { input: 2.00, output: 10.00, cacheWrite: 2.50,  cacheRead: 0.20 },
+  'claude-sonnet-5-5': { input: 2.00, output: 10.00, cacheWrite: 2.50,  cacheRead: 0.10 },
   // Sonnet 5 — $2 / $10
   'claude-sonnet-5':   { input: 2.00, output: 10.00, cacheWrite: 2.50,  cacheRead: 0.20 },
   // Sonnet 4.x — $3 / $15
   'claude-sonnet-4-6': { input: 3.00, output: 15.00, cacheWrite: 3.75,  cacheRead: 0.30 },
   'claude-sonnet-4-5': { input: 3.00, output: 15.00, cacheWrite: 3.75,  cacheRead: 0.30 },
   'claude-sonnet-4':   { input: 3.00, output: 15.00, cacheWrite: 3.75,  cacheRead: 0.30 },
+  'claude-haiku-5-5':  { input: 0.10, output:  0.50, cacheWrite: 0.125, cacheRead: 0.01, longPrompt: { tokens: 100_000, multiplier: 5 } },
   // Haiku 4.5 — $1 / $5
   'claude-haiku-4-5':  { input: 1.00, output:  5.00, cacheWrite: 1.25,  cacheRead: 0.10 },
   // Haiku 3.5 — retired, $0.80 / $4
   'claude-haiku-3-5':  { input: 0.80, output:  4.00, cacheWrite: 1.00,  cacheRead: 0.08 },
 }
 
-function toPerToken(p: ModelPricing): Required<ModelPricing> {
+type TokenPricing = Required<Pick<ModelPricing, 'input' | 'output' | 'cacheWrite' | 'cacheWrite1h' | 'cacheRead'>> & Pick<ModelPricing, 'fast' | 'longPrompt'>
+
+function toPerToken(p: ModelPricing): TokenPricing {
   return {
     input:        p.input      / 1_000_000,
     output:       p.output     / 1_000_000,
     cacheWrite:   p.cacheWrite / 1_000_000,
     cacheWrite1h: (p.cacheWrite1h ?? p.input * 2) / 1_000_000,
     cacheRead:    p.cacheRead  / 1_000_000,
+    fast:         p.fast,
+    longPrompt:   p.longPrompt,
   }
+}
+
+function isLongPrompt(v: unknown): boolean {
+  const o = v as Record<string, unknown> | null
+  return !!o && typeof o === 'object' && typeof o.tokens === 'number' && typeof o.multiplier === 'number'
 }
 
 function isValidEntry(v: unknown): v is ModelPricing {
@@ -65,7 +79,9 @@ function isValidEntry(v: unknown): v is ModelPricing {
     typeof o.output     === 'number' &&
     typeof o.cacheWrite === 'number' &&
     (o.cacheWrite1h === undefined || typeof o.cacheWrite1h === 'number') &&
-    typeof o.cacheRead  === 'number'
+    typeof o.cacheRead  === 'number' &&
+    (o.fast === undefined || typeof o.fast === 'number') &&
+    (o.longPrompt === undefined || isLongPrompt(o.longPrompt))
   )
 }
 
@@ -101,15 +117,15 @@ function loadUserOverrides(): Record<string, ModelPricing> {
   }
 }
 
-let cachedPricing: Record<string, Required<ModelPricing>> | null = null
+let cachedPricing: Record<string, TokenPricing> | null = null
 // Table keys, longest first, so date-suffixed IDs resolve to the most specific
 // entry (claude-opus-4-5-20251101 → claude-opus-4-5, while
 // claude-opus-4-20250514 falls through to claude-opus-4's legacy rate).
 let cachedKeysLongestFirst: string[] = []
-function getPricingTable(): Record<string, Required<ModelPricing>> {
+function getPricingTable(): Record<string, TokenPricing> {
   if (cachedPricing) return cachedPricing
   const merged: Record<string, ModelPricing> = { ...DEFAULT_PRICING_PER_MTOK, ...loadUserOverrides() }
-  const perToken: Record<string, Required<ModelPricing>> = {}
+  const perToken: Record<string, TokenPricing> = {}
   for (const [k, v] of Object.entries(merged)) perToken[k] = toPerToken(v)
   cachedPricing = perToken
   cachedKeysLongestFirst = Object.keys(perToken).sort((a, b) => b.length - a.length)
@@ -117,7 +133,7 @@ function getPricingTable(): Record<string, Required<ModelPricing>> {
 }
 
 // Back-compat export — some callers may have imported PRICING directly.
-export const PRICING: Record<string, Required<ModelPricing>> = new Proxy({} as Record<string, Required<ModelPricing>>, {
+export const PRICING: Record<string, TokenPricing> = new Proxy({} as Record<string, TokenPricing>, {
   get:           (_, k: string)        => getPricingTable()[k],
   has:           (_, k: string)        => k in getPricingTable(),
   ownKeys:       ()                    => Reflect.ownKeys(getPricingTable()),
@@ -165,12 +181,12 @@ export function unpricedModels(usage: Record<string, ModelUsage> | undefined): U
     .map(model => ({ model, priced_as: pricedAs(model) }))
 }
 
-function getPricing(model: string): Required<ModelPricing> {
+function getPricing(model: string): TokenPricing {
   return getPricingTable()[pricedAs(model)]
 }
 
 /** A cache write, its 1-hour part at the 1-hour rate and the rest at the 5-minute one */
-function cacheWriteCost(p: Required<ModelPricing>, written: number, oneHour: number): number {
+function cacheWriteCost(p: TokenPricing, written: number, oneHour: number): number {
   const hour = Math.min(Math.max(oneHour, 0), written)
   return (written - hour) * p.cacheWrite + hour * p.cacheWrite1h
 }
@@ -183,6 +199,27 @@ export function estimateCostFromUsage(model: string, usage: TurnUsage): number {
     cacheWriteCost(p, usage.cache_creation_input_tokens ?? 0, usage.cache_creation?.ephemeral_1h_input_tokens ?? 0) +
     (usage.cache_read_input_tokens     ?? 0) * p.cacheRead
   )
+}
+
+const US_INFERENCE = 1.1
+
+export interface RequestTerms {
+  speed?: string
+  inferenceGeo?: string
+}
+
+export function requestMultiplier(model: string, promptTokens: number, terms: RequestTerms = {}): number {
+  const p = getPricing(model)
+  let m = 1
+  if (terms.speed === 'fast' && p.fast) m *= p.fast
+  if (terms.inferenceGeo === 'us') m *= US_INFERENCE
+  if (p.longPrompt && promptTokens > p.longPrompt.tokens) m *= p.longPrompt.multiplier
+  return m
+}
+
+export function requestCost(model: string, usage: TurnUsage): number {
+  const prompt = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0)
+  return estimateCostFromUsage(model, usage) * requestMultiplier(model, prompt, { speed: usage.speed, inferenceGeo: usage.inference_geo })
 }
 
 export interface CacheEfficiencyResult {

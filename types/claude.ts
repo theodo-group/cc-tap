@@ -222,6 +222,7 @@ export interface TurnUsage {
   }
   service_tier?: string
   inference_geo?: string
+  speed?: string
 }
 
 export interface ToolCall {
