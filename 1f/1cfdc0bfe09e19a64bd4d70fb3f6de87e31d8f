@@ -1,0 +1,29 @@
+lib/__tests__/recent-turns.test.ts
+  s_ac31e07b2e980f::t_3b8880f9158eec 21,67
+lib/__tests__/session-ledger.test.ts
+  s_ac31e07b2e980f::t_0810f69d8810d1 268-277
+lib/__tests__/transcript-scan.test.ts
+  s_ac31e07b2e980f::t_c0f3cf204bcb7e 23-32
+lib/claude-reader.ts
+  s_ac31e07b2e980f::t_6fedeeba55d5ea 19,250,1000,1006-1011,1017-1020,1029-1032
+lib/session-ledger.ts
+  s_ac31e07b2e980f::t_d101721151bce3 43,94,102
+lib/transcript-scan.ts
+  s_ac31e07b2e980f::t_8828cdfc1c866a 267
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1f1cfdc0bfe09e19a64bd4d70fb3f6de87e31d8f",
+  "prompts": {},
+  "sessions": {
+    "s_ac31e07b2e980f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fddd819-5c4d-4052-a6a4-19d721be8afd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
