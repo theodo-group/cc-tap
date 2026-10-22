@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server'
 import fs from 'fs/promises'
 import path from 'path'
-import os from 'os'
-import { readMemories } from '@/lib/claude-reader'
+import { readMemories, claudePath } from '@/lib/claude-reader'
 
 export const dynamic = 'force-dynamic'
-
-const CLAUDE_DIR = path.join(os.homedir(), '.claude')
 
 export async function GET() {
   const memories = await readMemories()
@@ -35,10 +32,10 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
     }
 
-    const filePath = path.join(CLAUDE_DIR, 'projects', projectSlug, 'memory', file)
+    const filePath = claudePath('projects', projectSlug, 'memory', file)
 
-    // Ensure the resolved path stays within ~/.claude/projects/
-    const allowedRoot = path.join(CLAUDE_DIR, 'projects')
+    // Ensure the resolved path stays within <config-dir>/projects/
+    const allowedRoot = claudePath('projects')
     if (!filePath.startsWith(allowedRoot + path.sep)) {
       return NextResponse.json({ error: 'Path outside allowed directory' }, { status: 403 })
     }

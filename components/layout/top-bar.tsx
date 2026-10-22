@@ -7,6 +7,8 @@ import { Search, RefreshCw, Menu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useSidebar } from '@/components/layout/sidebar-context'
 import { LiveCaptureButton } from '@/components/proxy/live-capture-button'
+import { useToast } from '@/components/ui/toast'
+import { UsagePill } from '@/components/usage/usage-pill'
 import { cn } from '@/lib/utils'
 
 interface TopBarProps {
@@ -29,6 +31,7 @@ function formatTimestamp(d: Date) {
 export function TopBar({ title, subtitle, className }: TopBarProps) {
   const router = useRouter()
   const { setMobileOpen } = useSidebar()
+  const { toast } = useToast()
   const [refreshing, setRefreshing] = useState(false)
   const [now, setNow] = useState<string>('')
 
@@ -44,9 +47,19 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
 
   async function handleRefresh() {
     setRefreshing(true)
-    await mutate(() => true, undefined, { revalidate: true })
-    router.refresh()
-    setTimeout(() => setRefreshing(false), 800)
+    try {
+      await mutate(() => true, undefined, { revalidate: true })
+      router.refresh()
+      toast({ title: 'Data refreshed', description: 'Latest analytics loaded from ~/.claude/' })
+    } catch (err) {
+      toast({
+        title: 'Refresh failed',
+        description: err instanceof Error ? err.message : 'Could not reload analytics.',
+      })
+    } finally {
+      // Always re-enable the button, even if revalidation threw.
+      setTimeout(() => setRefreshing(false), 800)
+    }
   }
 
   return (
@@ -71,6 +84,9 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
 
       {/* Right: actions */}
       <div className="flex items-center gap-2 shrink-0">
+        {/* Live 5-hour usage gauge — always in view */}
+        <UsagePill />
+
         {/* Mobile hamburger */}
         <Button
           variant="ghost"
@@ -114,7 +130,13 @@ export function TopBar({ title, subtitle, className }: TopBarProps) {
           aria-label="Refresh data"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          <span className="hidden sm:inline">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
+          {refreshing ? (
+            <span className="t-shimmer hidden sm:inline" data-text="Refreshing…">
+              Refreshing…
+            </span>
+          ) : (
+            <span className="hidden sm:inline">Refresh</span>
+          )}
         </Button>
 
         {/* Live Capture (proxy lifecycle) */}

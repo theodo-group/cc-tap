@@ -18,6 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
+import { useToast } from '@/components/ui/toast'
 import {
   Download,
   Upload,
@@ -55,6 +56,7 @@ function previewUrl(dateFrom: string, dateTo: string) {
 }
 
 export default function ExportPage() {
+  const { toast } = useToast()
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState('')
   const [exportRange, setExportRange] = useState<{ from?: Date; to?: Date }>({})
@@ -117,8 +119,11 @@ export default function ExportPage() {
       a.download = `cclens-export-${date}.cclens.json`
       a.click()
       URL.revokeObjectURL(url)
+      toast({ title: 'Export downloaded', description: a.download })
     } catch (e) {
-      setExportError(e instanceof Error ? e.message : String(e))
+      const message = e instanceof Error ? e.message : String(e)
+      setExportError(message)
+      toast({ title: 'Export failed', description: message, variant: 'error' })
     } finally {
       setExporting(false)
     }
@@ -158,8 +163,11 @@ export default function ExportPage() {
       a.download = `${slug}-${date}.cclens-team.json`
       a.click()
       URL.revokeObjectURL(url)
+      toast({ title: 'Team export downloaded', description: a.download })
     } catch (e) {
-      setTeamExportError(e instanceof Error ? e.message : String(e))
+      const message = e instanceof Error ? e.message : String(e)
+      setTeamExportError(message)
+      toast({ title: 'Team export failed', description: message, variant: 'error' })
     } finally {
       setTeamExporting(false)
     }
@@ -205,7 +213,7 @@ export default function ExportPage() {
         subtitle="Download a portable backup of ~/.claude/ analytics or merge data from another machine"
       />
 
-      <div className="p-6 space-y-6 flex-1">
+      <div className="t-stagger-group p-6 space-y-6 flex-1">
         {previewError && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />

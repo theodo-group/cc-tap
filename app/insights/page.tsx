@@ -4,6 +4,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { TopBar } from '@/components/layout/top-bar'
 import { formatCost } from '@/lib/decode'
+import { AnimatedNumber } from '@/components/ui/animated-number'
 import type { InsightsResponse } from '@/app/api/insights/route'
 import type { Insight } from '@/lib/insights'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -67,7 +68,7 @@ function BudgetCard({ budget, onSaved }: {
         <CardDescription className="flex items-center gap-2"><Wallet className="w-4 h-4" /> Monthly budget</CardDescription>
         {budget && !editing ? (
           <CardTitle className={`text-3xl font-bold tabular-nums ${overPace ? 'text-red-500' : ''}`}>
-            {formatCost(budget.month_to_date_cost)}
+            <AnimatedNumber value={budget.month_to_date_cost} format={formatCost} />
             <span className="text-base font-normal text-muted-foreground"> / {formatCost(budget.monthly_budget_usd)}</span>
           </CardTitle>
         ) : (
@@ -121,7 +122,7 @@ export default function InsightsPage() {
   return (
     <div className="flex flex-col min-h-screen">
       <TopBar title="Insights" subtitle="Where your Claude Code spend can work harder" />
-      <div className="p-6 space-y-6">
+      <div className="t-stagger-group p-6 space-y-6">
 
         <Tabs value={String(days)} onValueChange={v => setDays(Number(v))}>
           <TabsList>
@@ -168,21 +169,21 @@ export default function InsightsPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardDescription className="flex items-center gap-2"><TrendingUp className="w-4 h-4" /> Monthly run rate</CardDescription>
-                  <CardTitle className="text-3xl font-bold tabular-nums text-[#d97706]">{formatCost(data.monthly_run_rate)}</CardTitle>
+                  <CardTitle className="text-3xl font-bold tabular-nums text-[#d97706]"><AnimatedNumber value={data.monthly_run_rate} format={formatCost} /></CardTitle>
                 </CardHeader>
                 <CardContent><p className="text-xs text-muted-foreground">{formatCost(data.window_cost)} in the last {data.window_days} days, scaled to 30</p></CardContent>
               </Card>
               <Card>
                 <CardHeader className="pb-2">
                   <CardDescription className="flex items-center gap-2"><PiggyBank className="w-4 h-4" /> Potential savings</CardDescription>
-                  <CardTitle className="text-3xl font-bold tabular-nums text-[#34d399]">{formatCost(data.total_monthly_savings)}</CardTitle>
+                  <CardTitle className="text-3xl font-bold tabular-nums text-[#34d399]"><AnimatedNumber value={data.total_monthly_savings} format={formatCost} /></CardTitle>
                 </CardHeader>
                 <CardContent><p className="text-xs text-muted-foreground">Per month, if every insight below is acted on</p></CardContent>
               </Card>
               <Card>
                 <CardHeader className="pb-2">
                   <CardDescription className="flex items-center gap-2"><Gauge className="w-4 h-4" /> Cache hit rate</CardDescription>
-                  <CardTitle className="text-3xl font-bold tabular-nums">{(data.cache_hit_rate * 100).toFixed(0)}%</CardTitle>
+                  <CardTitle className="text-3xl font-bold tabular-nums"><AnimatedNumber value={data.cache_hit_rate * 100} format={n => `${n.toFixed(0)}%`} /></CardTitle>
                 </CardHeader>
                 <CardContent><p className="text-xs text-muted-foreground">Context tokens served from prompt cache</p></CardContent>
               </Card>

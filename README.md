@@ -143,6 +143,31 @@ $env:CLAUDE_CONFIG_DIR="C:\Users\you\.claude-work"; npx cc-tap
 
 The active config directory is shown in the CLI banner on launch.
 
+## CLI Options
+
+```bash
+npx cc-tap [options]
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--host <host>` | `127.0.0.1` | Address to bind. Loopback only by default. Set `0.0.0.0` to expose the dashboard on your LAN. Also settable with the `CC_LENS_HOST` env var. |
+| `--port <port>` | `3000` | Port to listen on. Auto-increments if the port is taken. Also settable with the `PORT` env var. |
+| `--help`, `-h` | | Print usage and exit. |
+| `--version`, `-v` | | Print the version and exit. |
+
+The dashboard serves your private Claude Code history, so it binds to loopback (`127.0.0.1`) by default. `cc-tap` does not read the shell's `HOSTNAME` variable, so it works the same on WSL, containers, and CI. Override the host only if you understand the exposure.
+
+```bash
+# Bind to a fixed port
+npx cc-tap --port 4000
+
+# Expose on the local network (opt-in)
+npx cc-tap --host 0.0.0.0
+```
+
+There are also `cc-tap push` and `cc-tap digest` subcommands for team mode; see [Team mode](./docs/TEAM.md).
+
 ## Open a Given Page
 
 `--open <path>` makes the browser land on that page instead of the overview, for example one session:
@@ -176,10 +201,17 @@ npm run build
 npm start
 ```
 
-### Lint
+For the packaged standalone bundle used by the CLI:
+
+```bash
+npm run build:dist
+```
+
+### Checks
 
 ```bash
 npm run lint
+npm test
 ```
 
 ## Project Docs
@@ -188,6 +220,7 @@ npm run lint
 - [Known limitations](./docs/LIMITATIONS.md): accuracy, compatibility, and runtime caveats.
 - [Compatibility](./docs/COMPATIBILITY.md): supported local files and reporting guidance.
 - [Contributing](./docs/CONTRIBUTING.md): local setup, PR expectations, and manual test notes.
+- [Team mode](./docs/TEAM.md): shared-folder team analytics, push hub setup, and terminal team digests.
 - [Privacy](./docs/PRIVACY.md): what data is read, exported, or edited.
 - [Security](./docs/SECURITY.md): private vulnerability reporting and review checklist.
 
@@ -211,3 +244,11 @@ Dashboard data refreshes every 5 seconds while the app is open.
 ## Cost Estimates
 
 Claude Code stores token counts and model identifiers, not final billing totals. `cc-tap` estimates cost using the pricing table in `lib/pricing.ts`. If provider pricing changes, update that file to keep estimates current.
+
+To override or add rates without editing source, create `~/.cc-lens/pricing.json`. Entries are merged over the defaults, so you can override a single model or add new ones. Values are in dollars per million tokens:
+
+```json
+{
+  "claude-opus-4-8": { "input": 5.0, "output": 25.0, "cacheWrite": 6.25, "cacheRead": 0.5 }
+}
+```

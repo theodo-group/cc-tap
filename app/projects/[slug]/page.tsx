@@ -5,6 +5,7 @@ import useSWR from 'swr'
 import Link from 'next/link'
 import { TopBar } from '@/components/layout/top-bar'
 import { formatCost, formatDuration, formatDate, formatTokens } from '@/lib/decode'
+import { AnimatedNumber } from '@/components/ui/animated-number'
 import { categoryColorMix, toolBarColor } from '@/lib/tool-categories'
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import type { SessionWithFacet } from '@/types/claude'
@@ -127,7 +128,7 @@ export default function ProjectDetailPage() {
               <CardDescription className="flex items-center gap-2">
                 <MessageSquare className="w-4 h-4" /> Sessions
               </CardDescription>
-              <CardTitle className="text-3xl font-bold tabular-nums">{sessions.length}</CardTitle>
+              <CardTitle className="text-3xl font-bold tabular-nums"><AnimatedNumber value={sessions.length} /></CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">{totalMsgs.toLocaleString()} messages</p>
@@ -139,7 +140,7 @@ export default function ProjectDetailPage() {
               <CardDescription className="flex items-center gap-2">
                 <Clock className="w-4 h-4" /> Duration
               </CardDescription>
-              <CardTitle className="text-3xl font-bold tabular-nums">{formatDuration(totalDuration)}</CardTitle>
+              <CardTitle className="text-3xl font-bold tabular-nums"><span key={totalDuration} className="t-num">{formatDuration(totalDuration)}</span></CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">Total time</p>
@@ -152,7 +153,7 @@ export default function ProjectDetailPage() {
                 <TrendingUp className="w-4 h-4" /> Tokens
               </CardDescription>
               <CardTitle className="text-3xl font-bold tabular-nums text-blue-700 dark:text-[#60a5fa]">
-                {formatTokens(totalTokens)}
+                <AnimatedNumber value={totalTokens} format={n => formatTokens(Math.round(n))} />
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -166,7 +167,7 @@ export default function ProjectDetailPage() {
                 <DollarSign className="w-4 h-4" /> Est. Cost
               </CardDescription>
               <CardTitle className="text-3xl font-bold tabular-nums text-[#d97706]">
-                {formatCost(totalCost)}
+                <AnimatedNumber value={totalCost} format={formatCost} />
               </CardTitle>
             </CardHeader>
             <CardContent>

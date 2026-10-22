@@ -3,6 +3,7 @@
 import useSWR from 'swr'
 import { TopBar } from '@/components/layout/top-bar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AnimatedNumber } from '@/components/ui/animated-number'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -37,7 +38,7 @@ function CountCard({
         <CardDescription className="flex items-center gap-2">
           <Icon className="h-4 w-4" /> {title}
         </CardDescription>
-        <CardTitle className="text-3xl font-bold tabular-nums">{count}</CardTitle>
+        <CardTitle className="text-3xl font-bold tabular-nums"><AnimatedNumber value={count} /></CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-xs text-muted-foreground">{description}</p>

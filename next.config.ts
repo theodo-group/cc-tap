@@ -25,6 +25,11 @@ const nextConfig: NextConfig = {
       '**/*.jpg',
     ],
   },
+  // The demo bootstrap (instrumentation.ts) generates sample data at runtime via
+  // this script, so make sure it ships with the server bundle on a deploy.
+  outputFileTracingIncludes: {
+    '*': ['./bin/generate-sample.js'],
+  },
   turbopack: {
     root: packageRoot,
   },

@@ -10,6 +10,7 @@ import { CacheEfficiencyPanel } from '@/components/costs/cache-efficiency-panel'
 import { BudgetAlertBanner } from '@/components/costs/budget-alert-banner'
 import { UnpricedModelsAlert } from '@/components/costs/unpriced-models-alert'
 import { formatCost } from '@/lib/decode'
+import { AnimatedNumber } from '@/components/ui/animated-number'
 import { PRICING } from '@/lib/pricing'
 import type { CostAnalytics } from '@/types/claude'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,7 +31,7 @@ export default function CostsPage() {
   return (
     <div className="flex flex-col min-h-screen">
       <TopBar title="Costs" subtitle="Estimated spend from ~/.claude/" />
-      <div className="p-6 space-y-6">
+      <div className="t-stagger-group p-6 space-y-6">
 
         <BudgetAlertBanner />
 
@@ -62,7 +63,7 @@ export default function CostsPage() {
                     <DollarSign className="w-4 h-4" /> Total Cost
                   </CardDescription>
                   <CardTitle className="text-3xl font-bold tabular-nums text-[#d97706]">
-                    {formatCost(data.total_cost)}
+                    <AnimatedNumber value={data.total_cost} format={formatCost} />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -81,7 +82,7 @@ export default function CostsPage() {
                     <TrendingDown className="w-4 h-4" /> Cache Savings
                   </CardDescription>
                   <CardTitle className="text-3xl font-bold tabular-nums text-[#34d399]">
-                    {formatCost(data.total_savings)}
+                    <AnimatedNumber value={data.total_savings} format={formatCost} />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -95,7 +96,7 @@ export default function CostsPage() {
                     <Banknote className="w-4 h-4" /> Without Cache
                   </CardDescription>
                   <CardTitle className="text-3xl font-bold tabular-nums text-red-400">
-                    {formatCost(data.total_cost + data.total_savings)}
+                    <AnimatedNumber value={data.total_cost + data.total_savings} format={formatCost} />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
