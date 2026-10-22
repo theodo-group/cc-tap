@@ -1,0 +1,25 @@
+components/layout/sidebar.tsx
+  s_522d173bef3667::t_811e24df653e1d 102-103
+app/globals.css
+  s_522d173bef3667::t_8c7a4c9f8b27f6 203
+components/layout/top-bar.tsx
+  s_522d173bef3667::t_e22f42bedb987f 68
+components/usage/usage-pill.tsx
+  s_522d173bef3667::t_8c7a4c9f8b27f6 48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9f4866bd23d7ba90179c64377682d3bc1805325d",
+  "prompts": {},
+  "sessions": {
+    "s_522d173bef3667": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31661d4d-0398-4230-be24-c8e27442ea1a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
