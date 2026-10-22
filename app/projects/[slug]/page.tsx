@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation'
 import useSWR from 'swr'
 import Link from 'next/link'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import { formatCost, formatDuration, formatDate, formatTokens } from '@/lib/decode'
 import { categoryColorMix, toolBarColor } from '@/lib/tool-categories'
@@ -23,7 +24,7 @@ import {
 } from 'lucide-react'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 interface ProjectDetail {
   project_path: string

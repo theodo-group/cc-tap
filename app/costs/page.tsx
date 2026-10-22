@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import { CostOverTimeChart, type CostWindow } from '@/components/costs/cost-over-time-chart'
 import { CostByProjectChart } from '@/components/costs/cost-by-project-chart'
@@ -19,7 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertTriangle, TrendingDown, DollarSign, Banknote } from 'lucide-react'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 export default function CostsPage() {
   const [costWindow, setCostWindow] = useState<CostWindow>(90)

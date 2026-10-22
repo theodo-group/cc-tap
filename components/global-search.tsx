@@ -13,6 +13,7 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from '@/components/ui/command'
+import { apiFetch } from '@/lib/base-path'
 import { projectDisplayName } from '@/lib/decode'
 
 const PAGES = [
@@ -47,10 +48,10 @@ export function GlobalSearch() {
   useEffect(() => {
     if (!open || loaded) return
     Promise.all([
-      fetch('/api/sessions').then(r => r.json()),
-      fetch('/api/projects').then(r => r.json()),
-      fetch('/api/plans').then(r => r.json()),
-      fetch('/api/memory').then(r => r.json()),
+      apiFetch('/api/sessions').then(r => r.json()),
+      apiFetch('/api/projects').then(r => r.json()),
+      apiFetch('/api/plans').then(r => r.json()),
+      apiFetch('/api/memory').then(r => r.json()),
     ]).then(([s, p, pl, m]) => {
       setSessions(s.sessions ?? [])
       setProjects(p.projects ?? [])

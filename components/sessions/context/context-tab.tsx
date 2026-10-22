@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import type { AgentRun, AgentTimeline, ReplayData } from '@/types/claude'
 import { ContextChart, type ContextAxis, type ContextMode, type ContextSeries } from './context-chart'
 import { autocompactBand, buildContextMarks, buildContextSeries, deltaPoints, pointsInWindow } from '@/lib/context-series'
@@ -17,7 +18,7 @@ const ORCHESTRATOR = '__orchestrator'
 const ORCHESTRATOR_COLOR = 'var(--viz-sky)'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 interface Props {
   sessionId: string
@@ -90,7 +91,7 @@ export function ContextTab({ sessionId, replay, timeline, window: win, onWindowC
     key,
     async () => {
       const pairs = await Promise.all(active.map(async id => {
-        const r = await fetch(`/api/sessions/${sessionId}/agents/${id}`)
+        const r = await apiFetch(`/api/sessions/${sessionId}/agents/${id}`)
         return [id, r.ok ? ((await r.json()) as ReplayData) : null] as const
       }))
       return Object.fromEntries(pairs.filter(([, v]) => v)) as Record<string, ReplayData>

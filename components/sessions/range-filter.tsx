@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { format } from 'date-fns'
 import { X } from 'lucide-react'
+import { apiFetch } from '@/lib/base-path'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker'
@@ -22,7 +23,7 @@ interface Props {
   onChange: (window: TimeWindow | null, mode: RangeMode) => void
 }
 
-const fetcher = (url: string) => fetch(url).then(r => r.json())
+const fetcher = (url: string) => apiFetch(url).then(r => r.json())
 
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()

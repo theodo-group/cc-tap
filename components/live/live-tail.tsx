@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import { Radio, Copy, Check, Play } from 'lucide-react'
+import { apiFetch } from '@/lib/base-path'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -23,7 +24,7 @@ interface ProxyStatus {
   startedAt?: number
 }
 
-const fetcher = (url: string) => fetch(url).then(r => {
+const fetcher = (url: string) => apiFetch(url).then(r => {
   if (!r.ok) throw new Error(`API error ${r.status}`)
   return r.json()
 })
@@ -135,7 +136,7 @@ export function LiveTail() {
   )
 
   async function handleStart() {
-    await fetch('/api/proxy/start', { method: 'POST' })
+    await apiFetch('/api/proxy/start', { method: 'POST' })
     await mutateStatus()
   }
 

@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useMemo } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import { SessionTable } from '@/components/sessions/session-table'
 import { RangeFilter, FIVE_HOURS_MS, type RangeMode } from '@/components/sessions/range-filter'
@@ -10,7 +11,7 @@ import { windowFromSearch, windowToSearch, type TimeWindow } from '@/lib/time-wi
 import type { SessionsResponse } from '@/types/claude'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 function modeFromSearch(search: string, w: TimeWindow | null): RangeMode {
   const m = new URLSearchParams(search).get('mode')

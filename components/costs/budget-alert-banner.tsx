@@ -2,13 +2,14 @@
 
 import useSWR from 'swr'
 import Link from 'next/link'
+import { apiFetch } from '@/lib/base-path'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { formatCost } from '@/lib/decode'
 import type { InsightsResponse } from '@/app/api/insights/route'
 import { TrendingUp, Wallet } from 'lucide-react'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 /**
  * Quiet by default: renders nothing unless the month is pacing over budget

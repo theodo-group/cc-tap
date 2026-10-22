@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import { SessionSidebar } from '@/components/sessions/replay/session-sidebar'
 import { TurnList } from '@/components/sessions/replay/turn-list'
@@ -31,7 +32,7 @@ import { REPLAY_HIGHLIGHTS } from '@/lib/replay-highlight'
 import { AlertTriangle, MessageSquare, Coins, DollarSign, Clock, Zap, Radio, Bot, Loader2, Gauge } from 'lucide-react'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 type ReplayResponse = ReplayData
 

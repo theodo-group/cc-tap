@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import { formatTokens, formatCost } from '@/lib/decode'
 import type { WrappedStats } from '@/app/api/wrapped/route'
@@ -12,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AlertTriangle, Download, Share2 } from 'lucide-react'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 const W = 1200
 const H = 675
