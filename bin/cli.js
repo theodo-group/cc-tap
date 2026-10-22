@@ -8,9 +8,11 @@ const path = require('path')
 const fs   = require('fs')
 
 const { openPath } = require('./open-path')
+const { readBasePath } = require('./read-base-path')
 
 const PKG_DIR    = path.join(__dirname, '..')
-const SERVER_JS  = path.join(PKG_DIR, '.next', 'standalone', 'server.js')
+const STANDALONE = path.join(PKG_DIR, '.next', 'standalone')
+const SERVER_JS  = path.join(STANDALONE, 'server.js')
 
 // ANSI helpers — Claude's warm orange palette
 const O   = '\x1b[38;5;208m'  // orange
@@ -103,7 +105,7 @@ async function startSilentServer() {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, PORT: String(port), HOSTNAME: '127.0.0.1', NODE_ENV: 'production' },
   })
-  const url = `http://127.0.0.1:${port}`
+  const url = `http://127.0.0.1:${port}${readBasePath(STANDALONE)}`
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('server did not start within 30s')), 30_000)
     function check(d) {
@@ -256,7 +258,7 @@ async function main() {
   // Users who really need LAN access can set HOSTNAME=0.0.0.0 explicitly.
   const hostname = process.env.HOSTNAME ?? '127.0.0.1'
   const port     = await findFreePort(Number(process.env.PORT) || 3000)
-  const url      = `http://${hostname === '0.0.0.0' ? 'localhost' : hostname}:${port}`
+  const url      = `http://${hostname === '0.0.0.0' ? 'localhost' : hostname}:${port}${readBasePath(STANDALONE)}`
   // --open /sessions/<id>: land on that page rather than the overview.
   const landing  = openPath(args.open)
   if (args.open && !landing) console.log(`  ${O}!${R}  Ignoring --open ${String(args.open)}: not a plain app path (e.g. /sessions/<id>).`)
