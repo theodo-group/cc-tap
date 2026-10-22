@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import type { ReplayData } from '@/types/claude'
 import { PanelTurnList } from '@/components/sessions/replay/turn-list'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -13,7 +14,7 @@ import { useReplaySearch } from '@/components/sessions/replay/use-replay-search'
 import { DRAWER_HIGHLIGHTS } from '@/lib/replay-highlight'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 /** How long the flash waits for the virtual list to mount the turn it wants */
 const MOUNT_DEADLINE_MS = 2000

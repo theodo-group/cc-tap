@@ -1,6 +1,7 @@
 'use client'
 
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import type { SearchScope, ToolSearchResult } from '@/lib/tool-search'
 
 /** One search filter shown as a colored layer on the flame chart */
@@ -51,7 +52,7 @@ function fetchFilter(sessionId: string, f: ToolFilter): Promise<SearchState> {
   const key = `${sessionId}|${filterKey(f)}`
   let p = cache.get(key)
   if (!p) {
-    p = fetch(searchUrl(sessionId, f))
+    p = apiFetch(searchUrl(sessionId, f))
       .then(async r => {
         if (!r.ok) throw new Error(`API error ${r.status}`)
         return { status: 'ok', result: (await r.json()) as ToolSearchResult } as SearchState

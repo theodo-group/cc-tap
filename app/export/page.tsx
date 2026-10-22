@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useMemo } from 'react'
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import type { ImportDiff } from '@/types/claude'
 import {
@@ -34,7 +35,7 @@ import {
 import { format } from 'date-fns'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => {
+  apiFetch(url).then(r => {
     if (!r.ok) throw new Error(`API error ${r.status}`)
     return r.json()
   })
@@ -98,7 +99,7 @@ export default function ExportPage() {
         body.dateRange = { from: rangeFromStr || undefined, to: rangeToStr || undefined }
       }
 
-      const res = await fetch('/api/export', {
+      const res = await apiFetch('/api/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -139,7 +140,7 @@ export default function ExportPage() {
         body.dateRange = { from: rangeFromStr || undefined, to: rangeToStr || undefined }
       }
 
-      const res = await fetch('/api/export/team', {
+      const res = await apiFetch('/api/export/team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -172,7 +173,7 @@ export default function ExportPage() {
     try {
       const text = await file.text()
       const json = JSON.parse(text)
-      const res = await fetch('/api/import', {
+      const res = await apiFetch('/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(json),

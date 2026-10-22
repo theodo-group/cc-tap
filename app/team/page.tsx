@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import { formatCost, formatTokens, formatDuration, formatRelativeDate } from '@/lib/decode'
 import type { TeamAnalytics, TeamFeatureAdoption } from '@/types/claude'
@@ -15,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Users, DollarSign, MessageSquare, TrendingDown, AlertTriangle, FolderOpen, GitBranch, Sparkles, Plug } from 'lucide-react'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 const MEMBER_COLORS = ['#d97706', '#60a5fa', '#34d399', '#a78bfa', '#f472b6', '#fbbf24', '#22d3ee', '#fb7185']
 

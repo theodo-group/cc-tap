@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import type { HistoryEntry } from '@/types/claude'
 import { Input } from '@/components/ui/input'
@@ -12,7 +13,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Search, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 function formatTime(ts: number) {
   return new Date(ts).toLocaleString('en-US', {

@@ -3,13 +3,14 @@
 import useSWR from 'swr'
 import Link from 'next/link'
 import { Radio } from 'lucide-react'
+import { apiFetch } from '@/lib/base-path'
 import { projectDisplayName, formatRelativeDate } from '@/lib/decode'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import type { LiveSession } from '@/types/claude'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 function StatusBadge({ status }: { status?: string }) {
   if (status === 'running') {

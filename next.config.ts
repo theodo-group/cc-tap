@@ -7,7 +7,14 @@ import { fileURLToPath } from "url";
 // `.next/dev/.../build-manifest.json` for the app.
 const packageRoot = path.dirname(fileURLToPath(import.meta.url));
 
+// CC_TAP_BASE_PATH=/relay/cc-tap builds an app served under that prefix, for a proxy that
+// forwards it as-is. Unset, cc-tap serves at the root. Baked in at build time: the client
+// reads it through `env` (lib/base-path.ts), the CLI from the build's routes manifest.
+const basePath = process.env.CC_TAP_BASE_PATH ?? '';
+
 const nextConfig: NextConfig = {
+  basePath,
+  env: { CC_TAP_BASE_PATH: basePath },
   // Asked for rather than inherited: the session routes answer megabytes of
   // JSON, and a replay of 12 MB travels as 2.3 MB compressed.
   compress: true,

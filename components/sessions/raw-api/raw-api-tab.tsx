@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import type { CaptureDetail, CaptureSummary } from '@/types/inspector'
 import { CapturesEmptyState } from './empty-state'
 import { CaptureList } from './capture-list'
 import { AnatomyView } from './anatomy-view'
 import { Skeleton } from '@/components/ui/skeleton'
 
-const fetcher = (url: string) => fetch(url).then(r => {
+const fetcher = (url: string) => apiFetch(url).then(r => {
   if (!r.ok) throw new Error(`API error ${r.status}`)
   return r.json()
 })

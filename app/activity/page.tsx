@@ -1,6 +1,7 @@
 'use client'
 
 import useSWR from 'swr'
+import { apiFetch } from '@/lib/base-path'
 import { TopBar } from '@/components/layout/top-bar'
 import { ActivityHeatmap } from '@/components/overview/activity-heatmap'
 import { PeakHoursChart } from '@/components/overview/peak-hours-chart'
@@ -13,7 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertTriangle, Flame, CalendarDays, BarChart3, Clock, Zap, TrendingUp, Star } from 'lucide-react'
 
 const fetcher = (url: string) =>
-  fetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
+  apiFetch(url).then(r => { if (!r.ok) throw new Error(`API error ${r.status}`); return r.json() })
 
 interface ActivityData {
   daily_activity: DailyActivity[]
