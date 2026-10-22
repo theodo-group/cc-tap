@@ -1,0 +1,24 @@
+lib/__tests__/base-path.test.ts
+  s_04f516b5ce9672::t_b595dc2e5bc7c4 5
+next.config.ts
+  s_04f516b5ce9672::t_9b8fc10653e199 18-23
+README.md
+  s_04f516b5ce9672::t_fc579f3d8536b5 188
+  s_04f516b5ce9672::t_b595dc2e5bc7c4 185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3e64076d190c45ccd754cea8db59dabe8d6d07fd",
+  "prompts": {},
+  "sessions": {
+    "s_04f516b5ce9672": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "82c544b2-d847-494e-9285-da9f6bca5536",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Marek Elmayan <melmayan.dev@gmail.com>"
+    }
+  }
+}
