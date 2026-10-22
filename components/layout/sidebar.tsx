@@ -99,10 +99,8 @@ function SidebarContents({
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className={cn(
-        'border-b border-sidebar-border',
-        collapsed
-          ? 'flex flex-col items-center gap-3 px-2 py-4'
-          : 'flex items-center justify-between px-4',
+        'flex h-16 shrink-0 items-center border-b border-sidebar-border',
+        collapsed ? 'justify-center px-2' : 'justify-between px-4',
       )}>
         {!collapsed && <SidebarLogo />}
         <button
