@@ -3,21 +3,51 @@
 # Claude Code Lens (cc-tap)
 
 > **This is a Theodo Group fork of [Arindam200/cc-lens](https://github.com/Arindam200/cc-lens).**
-> It adds an inspector proxy and a real-time **Live Capture** view that intercepts the raw
-> requests Claude Code sends to `api.anthropic.com` — system prompt, tool schemas, cache
-> breakpoints, message history, SSE response. Useful for debugging unexpected Claude Code
-> behavior and for understanding how the CLI assembles its context window.
+> The fork adds **Live Capture**, agent/workflow timelines, context analysis, and
+> searchable session replays to help explain Claude Code's behavior.
 
-Local analytics dashboard for Claude Code. No cloud, no telemetry, just your `~/.claude/` data, visualized.
+Local-first analytics and debugging for Claude Code. Explore your `~/.claude/`
+history without an account or telemetry. Sharing team metrics is optional; see
+[Privacy](./docs/PRIVACY.md) for capture, export, and network behavior.
+
+## Quick Start
+
+Requires **Node.js 24+** and npm. For your own sessions, Claude Code must have
+written local history to `~/.claude/` (or a [custom profile](#multiple-claude-profiles)).
 
 ```bash
 npx cc-tap
 ```
 
 > Published to npm as **`cc-tap`** (the `cc-lens` name was taken). The CLI runs a
-> prebuilt standalone bundle, so it boots instantly with no install or compile step.
+> prebuilt standalone bundle, so no source build is needed after npm downloads the package.
 
 The CLI finds a free local port, starts the dashboard, and opens it in your browser.
+
+To explore fictional data before you have local history:
+
+```bash
+npx cc-tap --demo
+```
+
+The demo generates sample history in `~/.cc-lens/demo/.claude/` instead of reading
+your real Claude Code history.
+
+## Start With a Question
+
+| Question | Where to look |
+| --- | --- |
+| Why did a session behave unexpectedly? | Open **Sessions**, select the session, and search its **Replay** for text, thinking, tool inputs, and results. |
+| Which agent failed or used the context? | Use **Agents** for the workflow timeline and **Context** for token usage; click a chart to open the conversation at that moment. |
+| Why is this session expensive? | Compare the session cost and model breakdown with **Costs**, checking whether the figure is reported or estimated. |
+| What request did Claude Code send? | Start **Live Capture** before launching Claude Code with the provided command, then inspect **Live** or the session's **Raw API** tab. See the [capture caveat](#live-capture). |
+
+## Versions and Releases
+
+This README describes the current source branch. The npm package and GitHub
+releases may contain different sets of changes. Check `npx cc-tap --version`
+when reporting a problem, and consult the [changelog](./docs/CHANGELOG.md) for
+changes marked **Unreleased**. To try those changes, [run from source](#run-from-source).
 
 ## What You Can See
 
@@ -52,15 +82,35 @@ The CLI finds a free local port, starts the dashboard, and opens it in your brow
 - Tool calls and tool results shown inline.
 - File read/write/update tool results parsed into readable cards.
 - Per-turn model, duration, token breakdown, and estimated cost.
-- Compaction events shown in context with a token accumulation chart.
+- Compaction events shown alongside the context-size chart.
+- Search across the whole conversation, including thinking and tool inputs/results, in the Replay and agent drawers.
+- Virtualised turn lists and a parsed replay cache for long sessions.
+
+### Agents, Workflows & Context
+
+- **Agents**: a flame-style timeline of the orchestrator, nested sub-agents, and Workflow runs, with status, failures, tokens, and cost.
+- Open agent conversations and workflow details, or jump to the turn that launched an agent.
+- Select a time window and filter tool calls to investigate a particular part of a run.
+- **Context**: compare the orchestrator and selected agents in tokens or percentage of the model's context limit, by turn or wall-clock time.
+- Click a timeline or context chart to open the conversation at that moment.
 
 ### Live Capture
 
 ![Live Capture page](./public/live-capture.png)
 
 - Click **Live Capture** in the top bar → **Start**, then run `ENABLE_TOOL_SEARCH=true ANTHROPIC_BASE_URL=http://localhost:<port> claude` in a new terminal — the snippet (with the right port) is copyable from the popover.
-- The **Live** page shows a real-time tail of every Anthropic API request with a side-by-side anatomy view: system prompt with cache breakpoints, tool schemas, message history, raw SSE response.
+- The **Live** page shows requests routed through the proxy with a side-by-side anatomy view: system prompt with cache breakpoints, tool schemas, message history, raw SSE response and an assembled response view.
 - Captures are correlated to JSONL sessions automatically and also surface under a **Raw API** tab on each session page; data is gzipped to `~/.cc-lens/payloads/` with a SQLite index.
+
+**Capture caveat:** pointing Claude Code at a custom `ANTHROPIC_BASE_URL` can change
+its behavior. `ENABLE_TOOL_SEARCH=true` preserves tool search, but does not guarantee
+that the captured request is identical to a normal session. An alternative based on
+Claude Code's OTel body export is proposed in [PR #21](https://github.com/theodo-group/cc-tap/pull/21);
+it is not the capture flow documented here. See [Known limitations](./docs/LIMITATIONS.md#live-capture).
+
+Raw captures can contain private prompts, source code, tool results, and thinking.
+They are compressed, not anonymized or encrypted. See [Privacy](./docs/PRIVACY.md#live-capture)
+for storage and retention defaults.
 
 ### Costs
 
@@ -71,6 +121,13 @@ The CLI finds a free local port, starts the dashboard, and opens it in your brow
 - Per-model token and cost breakdown.
 - Cache efficiency panel.
 - Pricing reference from `lib/pricing.ts`.
+- Session costs use Claude Code's reported total when it covers the session; otherwise they are estimated and marked accordingly. See [Costs and pricing](#costs-and-pricing).
+
+### Insights & Usage
+
+- **Insights**: cache-efficiency and model-choice suggestions, budget pacing, and spend-spike detection.
+- Usage headroom for the 5-hour and 7-day windows.
+- **Wrapped**: a yearly aggregate stats card with PNG download.
 
 ### Tools & Features
 ![Tools & features](./public/tools.png)
@@ -94,8 +151,6 @@ The CLI finds a free local port, starts the dashboard, and opens it in your brow
 
 ### Local Claude Code Files
 
-![Todos](./public/todos.png)
-
 - **History**: Search and page through `~/.claude/history.jsonl`.
 - **Todos**: Browse todos from `~/.claude/todos/` with search and status filters.
 - **Plans**: Read saved plans from `~/.claude/plans/` with inline Markdown rendering.
@@ -112,6 +167,11 @@ The CLI finds a free local port, starts the dashboard, and opens it in your brow
 - Drop an export file to preview an additive merge from another machine.
 
 Import is intentionally preview-only right now. It shows which sessions are new or already present, but it does not write merged data back into `~/.claude/`, to avoid corrupting live Claude Code files.
+
+The separate **Team export** produces a redacted metrics file for aggregation
+across people and machines. It excludes prompts by default; the opt-in `titles`
+level includes first prompts. General `.cclens.json` exports are private and are
+not covered by that redaction. See [Team mode](./docs/TEAM.md).
 
 ## Navigation
 
@@ -151,6 +211,8 @@ npx cc-tap [options]
 
 | Option | Default | Description |
 | --- | --- | --- |
+| `--demo` | Off | Generate fictional session history and use it instead of your real Claude Code history. |
+| `--open <path>` | `/` | Open a particular app page, for example `/sessions/<session-id>`. |
 | `--host <host>` | `127.0.0.1` | Address to bind. Loopback only by default. Set `0.0.0.0` to expose the dashboard on your LAN. Also settable with the `CC_LENS_HOST` env var. |
 | `--port <port>` | `3000` | Port to listen on. Auto-increments if the port is taken. Also settable with the `PORT` env var. |
 | `--help`, `-h` | | Print usage and exit. |
@@ -252,9 +314,13 @@ npm test
 
 Dashboard data refreshes every 5 seconds while the app is open.
 
-## Cost Estimates
+## Costs and Pricing
 
-Claude Code stores token counts and model identifiers, not final billing totals. `cc-tap` estimates cost using the pricing table in `lib/pricing.ts`. If provider pricing changes, update that file to keep estimates current.
+When Claude Code writes a complete, usable `cost-state` record, `cc-tap` uses its
+reported session total, including sub-agents. Otherwise it estimates from recorded
+token usage and `lib/pricing.ts`. Estimated sessions show `~` in the sessions table
+and an estimate label on the session page. These figures are usage diagnostics,
+not invoice totals or subscription charges. See [Known limitations](./docs/LIMITATIONS.md#data-accuracy).
 
 To override or add rates without editing source, create `~/.cc-lens/pricing.json`. Entries are merged over the defaults, so you can override a single model or add new ones. Values are in dollars per million tokens:
 
@@ -263,3 +329,11 @@ To override or add rates without editing source, create `~/.cc-lens/pricing.json
   "claude-opus-4-8": { "input": 5.0, "output": 25.0, "cacheWrite": 6.25, "cacheRead": 0.5 }
 }
 ```
+
+Optional fields include `cacheWrite1h`, `fast`, and `longPrompt` for request-level
+pricing. Overrides are loaded once per process; restart cc-tap after editing the
+file. Overrides affect table estimates, not a session's accepted reported total.
+Unknown models are flagged when they borrow another model's rates.
+
+The CLI name is `cc-tap`. Existing `~/.cc-lens/` paths, `CC_LENS_*` environment
+variables, and `.cclens.json` formats retain their names for compatibility.

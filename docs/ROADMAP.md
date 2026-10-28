@@ -1,37 +1,80 @@
 # Roadmap
 
-This roadmap is intentionally practical. `cc-lens` should stay local-first, fast to launch, and useful without an account or hosted backend.
+`cc-tap` is a local-first tool for understanding Claude Code sessions, agents,
+context, and usage. It should remain useful without an account or hosted backend.
 
-## Near Term
+The capabilities below exist on `main`; this is not a list of npm release
+contents. See [CHANGELOG.md](./CHANGELOG.md) for released and unreleased changes.
+Proposed work is a direction for review, not a dated delivery commitment.
 
-- **Demo mode**: Add `npx cc-lens --demo` with anonymized sample data so users can evaluate the dashboard before they have Claude Code history.
-- **Parser tests**: Add focused coverage for JSONL parsing, malformed lines, missing directories, old session shapes, Windows paths, and pricing estimates.
-- **First-run diagnostics**: Show clear empty/error states for missing `~/.claude/`, unreadable files, empty projects, and active `CLAUDE_CONFIG_DIR`.
-- **Replay search**: Search within a session replay and filter turns by tools, errors, compaction, and high-cost turns.
+## Delivered on Main
 
-## Medium Term
+- **Session investigation**: searchable, virtualised replays, parsed-response
+  caching, tool inputs/results, and jumps to a turn or time.
+- **Agents and workflows**: nested timelines, workflow status and failures,
+  transcript drawers, time windows, and tool-call filters.
+- **Context analysis**: orchestrator and sub-agent curves in tokens or percentage
+  of context limit, with links back to the conversation.
+- **Live Capture**: local inspector proxy, Live view, and per-session Raw API tab.
+  The proxy has [behavioral limitations](./LIMITATIONS.md#live-capture).
+- **Cost accounting**: response deduplication, sub-agent totals, request-level
+  pricing, local pricing overrides, unpriced-model warnings, and Claude Code's
+  reported session cost when a complete record is available.
+- **Demo mode**: `npx cc-tap --demo` with fictional session history.
+- **Automated tests**: parser, pricing, replay/search, agents/workflows, team,
+  and CLI helper coverage in `lib/__tests__/`, run in CI with lint and build.
+- **Team aggregation**: redacted metrics exports, shared-folder analytics,
+  optional push hub, adoption metrics, and MCP inventory.
+- **Insights and budgets**: savings suggestions, monthly budget pacing, and
+  spend-spike detection.
+- **Usage and digest**: usage headroom and `cc-tap digest` for personal or team scope.
+- **Wrapped**: yearly aggregate stats card.
+- **Integration**: `--open` and builds served under `CC_TAP_BASE_PATH`.
 
-- **Redacted export**: Let users export selected sessions with prompts, paths, and command output redacted.
-- **Pricing overrides**: Allow local pricing overrides and show the pricing table date used for estimates.
-- **Compatibility fixtures**: Maintain sample fixtures for known Claude Code local file formats.
+## Proposed Next Priorities
 
-## Shipped
+### 1. Validate Capture Fidelity
 
-- **Actionable insights** (`/insights`): low cache hit rate, premium models on light sessions, compaction thrash, and plan fit — each with a monthly dollar estimate.
-- **Budgets and spend alerts**: monthly budget with pacing projection and daily spike detection.
-- **Team adoption and MCP governance** (`/team`): per-member feature adoption, idle members, and an inventory of MCP servers in use.
-- **Terminal digest** (`cc-tap digest`): formatted spend summary for solo or team scope, printed in the terminal. Slack/webhook alerts are planned for the managed version only.
-- **Wrapped** (`/wrapped`): shareable yearly stats card.
+- Reproduce differences between a normal Claude Code session and proxy capture;
+  review [PR #21](https://github.com/theodo-group/cc-tap/pull/21), which proposes
+  OTel body-export ingestion as an alternative.
+- Document the selected mode's coverage, storage lifecycle, and whether response
+  data is captured verbatim or reconstructed before making it the default.
+- Check Live, Raw API, Agents, and Context visually after upstream UI changes.
 
-## Later
+### 2. Observe Current Users (Gemba)
 
-- **Team aggregate mode**: Merge redacted exports from multiple machines into aggregate analytics without sharing raw transcripts.
-- **Public sample dashboard**: Publish a static/sample view that demonstrates the product without private data.
-- **Plugin-style metrics**: Allow advanced users to add local-only custom metrics without changing core dashboard code.
+- Observe regular, occasional, and former users completing a real investigation
+  on their own setup: launch, find a session, identify the cause, and take action.
+- Include context/agent debugging, unexpected cost, and live-capture tasks.
+- Record the task, expected result, friction, consequence, and workaround.
+  Use recurring, consequential problems to choose the next improvements.
+- Aim for five observed sessions and three ranked problems with concrete
+  evidence. This is a research plan; no user findings are asserted here.
+
+### 3. Make First Use and Maintenance Clear
+
+- Validate first-run states for missing, unreadable, empty, and custom Claude Code
+  directories, and make the active data source easy to identify.
+- Keep README examples, privacy guidance, roadmap status, and release notes aligned
+  with shipped behavior. Distinguish `main` from the published package.
+- Expand compatibility fixtures for old and new transcript formats and add
+  real-world Windows validation.
+
+## Candidates After User Research
+
+- Selected-session export with configurable redaction beyond the existing Team
+  metrics export. General `.cclens.json` exports remain private.
+- Replay export and clearer pricing provenance/date in the UI.
+- A maintained public sample dashboard.
+- Local custom metrics without changes to core dashboard code.
+
+Managed/enterprise ideas are described separately in [TEAM-WORKSPACE-PLAN.md](./TEAM-WORKSPACE-PLAN.md)
+and [MANAGED-PLAN.md](./MANAGED-PLAN.md). Those plans do not imply availability in
+the open-source package; Slack/webhook delivery is not implemented here.
 
 ## Non-Goals
 
-- Hosted sync by default.
-- Telemetry by default.
-- Uploading raw Claude Code transcripts.
-- Replacing Claude Code's own files or acting as the source of truth.
+- Hosted sync or telemetry by default.
+- Automatic upload of raw Claude Code transcripts.
+- Replacing Claude Code's files or acting as their source of truth.

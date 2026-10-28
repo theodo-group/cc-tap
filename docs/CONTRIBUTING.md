@@ -1,6 +1,6 @@
 # Contributing to Claude Code Lens
 
-Thanks for helping improve `cc-lens`. This project reads private local Claude Code data, so contributions should preserve the local-first, no-telemetry model.
+Thanks for helping improve `cc-tap`. This project reads private local Claude Code data, so contributions should preserve the local-first, no-telemetry model.
 
 ## Development Setup
 
@@ -19,12 +19,18 @@ npm run dev
 
 Open the local URL shown by Next.js, usually <http://localhost:3000>.
 
-Build and lint before opening a PR:
+Run the same lint, test, and build checks as CI before opening a code PR:
 
 ```bash
 npm run lint
+npm test
 npm run build
 ```
+
+When changing CLI packaging, proxy bundling, or build-path behavior, also run
+`npm run build:dist` and smoke-test `node bin/cli.js` from that standalone build.
+Documentation-only changes should be checked for relative links, command names,
+and agreement with the implementation; they do not require a new application build.
 
 ## Project Structure
 
@@ -33,12 +39,19 @@ npm run build
 - `lib/claude-reader.ts`: local Claude Code file readers
 - `lib/replay-parser.ts`: session JSONL replay parsing
 - `lib/pricing.ts`: token and cost estimation
+- `lib/agent-timeline.ts`, `lib/workflow-runs.ts`: agent/workflow investigation
+- `lib/session-ledger.ts`, `lib/reported-cost.ts`: per-turn and reported costs
+- `lib/redact.ts`: Team export allowlist
+- `lib/__tests__/`: Vitest coverage
+- `proxy/`: raw API forwarding and local capture storage
 - `types/claude.ts`: shared app types
-- `bin/cli.js`: published `cc-lens` CLI entrypoint
+- `bin/cli.js`: published `cc-tap` CLI entrypoint
 
 ## Contribution Guidelines
 
-- Keep the app local-first. Do not add hosted services, telemetry, analytics, or external upload paths.
+- Keep ordinary use local-first and free of telemetry or required hosted services.
+  Team pushes and proxy forwarding are explicit network flows; document changes
+  to their destinations, data, and consent rather than introducing silent uploads.
 - Treat `~/.claude/` content as private user data.
 - Bind local servers to loopback by default unless the user explicitly opts into another host.
 - Prefer small PRs with a clear user-facing outcome.
@@ -65,12 +78,15 @@ CLAUDE_CONFIG_DIR=~/.claude-work npm run dev
 
 ## Pull Request Checklist
 
-- [ ] The change keeps user data local.
+- [ ] Local browsing keeps user data local; any explicit sharing/capture flow is documented.
 - [ ] `npm run lint` passes.
+- [ ] `npm test` passes.
 - [ ] `npm run build` passes.
 - [ ] User-facing behavior is documented when relevant.
 - [ ] Screenshots or short recordings are included for visible UI changes.
 - [ ] Parser/filesystem changes handle missing or malformed local files.
+- [ ] README, roadmap, and limitations agree on whether a capability is delivered,
+      partial, or proposed; unreleased changes are not presented as npm releases.
 
 ## Reporting Security Issues
 
