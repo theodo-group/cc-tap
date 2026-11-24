@@ -1,80 +1,84 @@
 # Roadmap
 
-`cc-tap` is a local-first tool for understanding Claude Code sessions, agents,
-context, and usage. It should remain useful without an account or hosted backend.
+Last reviewed 2026-11-24. Nothing here has a delivery date. The order is the commitment.
 
-The capabilities below exist on `main`; this is not a list of npm release
-contents. See [CHANGELOG.md](./CHANGELOG.md) for released and unreleased changes.
-Proposed work is a direction for review, not a dated delivery commitment.
+## What cc-tap is for
 
-## Delivered on Main
+cc-tap is a debugger for agentic Claude Code sessions. It answers three questions about a session. What did the agents do, where did the context go, and what did it cost.
 
-- **Session investigation**: searchable, virtualised replays, parsed-response
-  caching, tool inputs/results, and jumps to a turn or time.
-- **Agents and workflows**: nested timelines, workflow status and failures,
-  transcript drawers, time windows, and tool-call filters.
-- **Context analysis**: orchestrator and sub-agent curves in tokens or percentage
-  of context limit, with links back to the conversation.
-- **Live Capture**: local inspector proxy, Live view, and per-session Raw API tab.
-  The proxy has [behavioral limitations](./LIMITATIONS.md#live-capture).
-- **Cost accounting**: response deduplication, sub-agent totals, request-level
-  pricing, local pricing overrides, unpriced-model warnings, and Claude Code's
-  reported session cost when a complete record is available.
-- **Demo mode**: `npx cc-tap --demo` with fictional session history.
-- **Automated tests**: parser, pricing, replay/search, agents/workflows, team,
-  and CLI helper coverage in `lib/__tests__/`, run in CI with lint and build.
-- **Team aggregation**: redacted metrics exports, shared-folder analytics,
-  optional push hub, adoption metrics, and MCP inventory.
-- **Insights and budgets**: savings suggestions, monthly budget pacing, and
-  spend-spike detection.
-- **Usage and digest**: usage headroom and `cc-tap digest` for personal or team scope.
-- **Wrapped**: yearly aggregate stats card.
-- **Integration**: `--open` and builds served under `CC_TAP_BASE_PATH`.
+The repo holds two products. We inherited a personal stats dashboard from cc-lens, with costs, activity, the usage gauge and Wrapped. Theodo then built the session investigation tools on top of it. Those are the agents and workflow timeline, the context curves, tool-call filters, conversation search, raw API capture and cost that matches what Claude Code reports. Nearly every commit since the fork went to the second product, and the roadmap follows that. The stats pages stay and get fixes. They get no new features.
 
-## Proposed Next Priorities
+The first users are Theodo engineers. Public adoption is welcome, and we don't plan work to chase it.
 
-### 1. Validate Capture Fidelity
+cc-tap stays local. It needs no account and no hosted backend.
 
-- Reproduce differences between a normal Claude Code session and proxy capture;
-  review [PR #21](https://github.com/theodo-group/cc-tap/pull/21), which proposes
-  OTel body-export ingestion as an alternative.
-- Document the selected mode's coverage, storage lifecycle, and whether response
-  data is captured verbatim or reconstructed before making it the default.
-- Check Live, Raw API, Agents, and Context visually after upstream UI changes.
+## Now
 
-### 2. Observe Current Users (Gemba)
+These four items unblock the rest. Do them first, in this order.
 
-- Observe regular, occasional, and former users completing a real investigation
-  on their own setup: launch, find a session, identify the cause, and take action.
-- Include context/agent debugging, unexpected cost, and live-capture tasks.
-- Record the task, expected result, friction, consequence, and workaround.
-  Use recurring, consequential problems to choose the next improvements.
-- Aim for five observed sessions and three ranked problems with concrete
-  evidence. This is a research plan; no user findings are asserted here.
+1. Review and merge #21. Today Live Capture points `ANTHROPIC_BASE_URL` at a local proxy, and Claude Code behaves differently behind it. The PR measured 20 tools instead of 12, extra classifier calls and different beta headers. A capture that differs from a normal session can't be trusted for debugging. Split the PR if 2,887 lines is too much for one review.
+2. Release 0.12. The published package predates the fixes to 1-hour cache write pricing and reported session cost, so it shows wrong costs. Cut the changelog into versions, merge #27, and publish to npm from CI when someone pushes a tag. Releases should stop depending on someone remembering to run a command.
+3. Take ownership of the project's name. `MANAGED.md`, `MANAGED-PLAN.md` and `BUILD-IN-PUBLIC.md` describe the upstream author's plan for a hosted paid product, and nobody at Theodo owns that plan. Move them out of `docs/` or delete them. Fix the package author and the sidebar footer link, which still name upstream. Plan the move from `~/.cc-lens` to `~/.cc-tap` and keep reading the old directory.
+4. Watch five Theodo engineers debug a real session on their own machine. Write down the task, where they got stuck and what they did instead. PR #27 already describes the method. Use the three problems that come up most to reorder the next section.
 
-### 3. Make First Use and Maintenance Clear
+## Next
 
-- Validate first-run states for missing, unreadable, empty, and custom Claude Code
-  directories, and make the active data source easy to identify.
-- Keep README examples, privacy guidance, roadmap status, and release notes aligned
-  with shipped behavior. Distinguish `main` from the published package.
-- Expand compatibility fixtures for old and new transcript formats and add
-  real-world Windows validation.
+### Hidden calls
 
-## Candidates After User Research
+People have found Claude Code spending tokens on requests they never saw. One example is a background call that summarises the whole conversation into one line, over and over. The session transcript doesn't record those calls, so cc-tap can't show them today.
 
-- Selected-session export with configurable redaction beyond the existing Team
-  metrics export. General `.cclens.json` exports remain private.
-- Replay export and clearer pricing provenance/date in the UI.
-- A maintained public sample dashboard.
-- Local custom metrics without changes to core dashboard code.
+Once #21 lands, cc-tap sees every model request. The OTel export also tags each request with a `query_source` that says what triggered it. The ingest logs that field and throws it away.
 
-Managed/enterprise ideas are described separately in [TEAM-WORKSPACE-PLAN.md](./TEAM-WORKSPACE-PLAN.md)
-and [MANAGED-PLAN.md](./MANAGED-PLAN.md). Those plans do not imply availability in
-the open-source package; Slack/webhook delivery is not implemented here.
+- Store `query_source` with each capture.
+- Match each capture to the transcript by message ID. A capture with no transcript line is a hidden call.
+- Add a panel to the session page that groups hidden calls by purpose and shows count, tokens, cost and how often they fire. A click opens the request in the Raw API tab so the user can read the prompt.
+- Show the hidden share of spend on the Costs page.
 
-## Non-Goals
+Two things need checking before we build the panel.
 
-- Hosted sync or telemetry by default.
-- Automatic upload of raw Claude Code transcripts.
-- Replacing Claude Code's files or acting as their source of truth.
+- We haven't confirmed that the OTel export contains every background call. Run one session through both the export and an intercepting proxy and compare the two lists. If the export misses calls, this feature needs the proxy described under Later.
+- Claude Code's reported session cost covers everything the process spent. The transcript only covers what it logged. The gap between the two might reveal hidden spend on old sessions with no capture at all. The gap also contains pricing error, so measure it on a few captured sessions before showing it to anyone.
+
+### Session diagnosis
+
+The session page has the data to explain a bad session and leaves the user to find the explanation. Add a findings list at the top of each session. It names the most expensive turns, the tool results that filled the context, retry storms, failed agents and the turns where the cache broke. Each finding links to the turn. The Insights page does this per account today. This does it per session.
+
+### Request diff
+
+Show what changed between two consecutive captured requests. The first use is finding the edit that invalidated the prompt cache.
+
+### Shareable session
+
+Export one session as a redacted bundle that a colleague opens with `npx cc-tap --open`. Today the only way to show someone a session is to share your screen.
+
+### Compare two sessions
+
+Put two sessions side by side with cost, turns, context growth and tool mix. Use it to judge a model change, a `CLAUDE.md` edit or a new skill on the same task.
+
+### Group the navigation
+
+Sort the 18 sidebar entries into about four groups and put the session tools first.
+
+### Guard against format changes
+
+Claude Code changes its transcript format without notice. Keep one fixture session per Claude Code version and parse them all in CI. Add a smoke test for each API route.
+
+## Later
+
+Pick from this list after the five observations. None of it is committed.
+
+- An intercepting proxy using `HTTPS_PROXY` and a local CA, to replace the `ANTHROPIC_BASE_URL` proxy as the advanced capture mode. It keeps the real URL and sees response headers, raw SSE, timing and calls outside `/v1/messages`. It needs a CA on the user's machine and strict redaction of tokens, and it must chain to corporate proxies. Check first that Claude Code behaves the same behind it.
+- Real usage figures in place of the estimated gauge. This depends on the rate-limit headers the intercepting proxy would capture, if they carry what we expect.
+- Stable deep links and a read-only API, so another tool can embed cc-tap. `--open` and `CC_TAP_BASE_PATH` are the first two pieces.
+- Team reporting per client project, built on the existing redacted exports.
+- A live board of running sessions and agents across a machine.
+
+## What we won't build
+
+- More personal stats pages.
+- A hosted service, telemetry, or any automatic upload of transcripts.
+- An import that writes into `~/.claude/`. Claude Code owns those files.
+
+## Already on main
+
+The session page has a searchable replay, an Agents tab with workflow runs, a Context tab, time windows and tool-call filters. Live Capture and the Raw API tab work through the local proxy. Cost uses Claude Code's reported total when one covers the session, and flags any model that has no price entry. Team mode has redacted exports, a shared-folder view, a push hub and `cc-tap digest`. The CLI has `--demo`, `--open` and builds under a path prefix. [CHANGELOG.md](./CHANGELOG.md) has the detail.
