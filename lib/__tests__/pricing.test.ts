@@ -154,6 +154,20 @@ describe('rates as of 2026-10', () => {
     expect(hasKnownPricing('claude-haiku-5-5')).toBe(true)
   })
 
+  it('prices Fable 5.2 and Mythos 5.2 on their own entries, not through the claude-fable-5 prefix', () => {
+    for (const model of ['claude-fable-5-2', 'claude-mythos-5-2', 'claude-fable-5-2-20261101']) {
+      const p = getPricing(model)
+      expect(p.input * MTOK).toBeCloseTo(8)
+      expect(p.output * MTOK).toBeCloseTo(40)
+      expect(p.cacheWrite * MTOK).toBeCloseTo(10)
+      expect(p.cacheWrite1h * MTOK).toBeCloseTo(16)
+      expect(p.cacheRead * MTOK).toBeCloseTo(0.2)
+      expect(hasKnownPricing(model)).toBe(true)
+    }
+    expect(requestMultiplier('claude-fable-5-2', 0, { speed: 'fast' })).toBe(2)
+    expect(requestMultiplier('claude-mythos-5-2', 0, { speed: 'fast' })).toBe(2)
+  })
+
   it('prices Mythos at Fable rates', () => {
     expect(getPricing('claude-mythos-5-1').cacheRead * MTOK).toBeCloseTo(0.25)
     expect(getPricing('claude-mythos-5').cacheRead * MTOK).toBeCloseTo(1)

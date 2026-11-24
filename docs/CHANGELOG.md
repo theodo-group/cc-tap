@@ -15,6 +15,7 @@ Syncs upstream [Arindam200/cc-lens](https://github.com/Arindam200/cc-lens) `main
 
 ### Added
 
+- **Fable 5.2 and Mythos 5.2 rates** ($8 / $40, 1-hour cache writes $16, cache reads $0.20, fast mode 2×), checked against Anthropic's pricing page as of 2026-11. Fable 5.2 sessions were previously charged through the `claude-fable-5` prefix at $10 / $50 with $1.00 cache reads, and fast-mode turns at standard rates. Mythos models now get the 1M context window instead of the 200k fallback.
 - From upstream: skill (slash-command) invocations ranked on the Tools page, parsed from `Skill` tool calls.
 - From upstream: a usage headroom gauge for the 5-hour and 7-day windows, with reset pings and cap warnings. Its per-turn scan counts each API response once, like the rest of cc-tap.
 - From upstream: `--demo` mode with a sample dataset, served by default on hosted (Vercel) deploys.
