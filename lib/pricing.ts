@@ -17,8 +17,11 @@ interface ModelPricing {
 // 5-minute ephemeral rate; a 1-hour write costs 2× input on every model
 // (cacheWrite1h), and Claude Code writes its main thread to the 1-hour cache.
 // Users can override via ~/.cc-lens/pricing.json. Source: claude.com/pricing
-// as of 2026-09.
+// as of 2026-11.
 const DEFAULT_PRICING_PER_MTOK: Record<string, ModelPricing> = {
+  // Fable 5.2 — $8 / $40, cache reads $0.20 (0.025× input), fast mode $16 / $80
+  'claude-fable-5-2':  { input: 8.00,  output: 40.00, cacheWrite: 10.00, cacheRead: 0.20, fast: 2 },
+  'claude-mythos-5-2': { input: 8.00,  output: 40.00, cacheWrite: 10.00, cacheRead: 0.20, fast: 2 },
   // Fable 5.1 — $10 / $50, cache reads cut to $0.25 (vs 10% of input elsewhere)
   'claude-fable-5-1':  { input: 10.00, output: 50.00, cacheWrite: 12.50, cacheRead: 0.25 },
   // Fable 5 — $10 / $50

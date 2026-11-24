@@ -1,12 +1,13 @@
 /** Per-model context window sizes, used by the Context tab to show a percentage of the maximum. */
 
-// Vendored defaults, in tokens. Opus and Fable run with the 1M window almost
-// always; Sonnet and Haiku stay at 200k. A session log never records which
+// Vendored defaults, in tokens. Opus, Fable and Mythos run with the 1M window
+// almost always; Sonnet and Haiku stay at 200k. A session log never records which
 // window was negotiated, so these are the best guess — override a model in
 // ~/.cc-lens/context.json for the rare session that ran at another size.
 const DEFAULT_CONTEXT_LIMITS: Record<string, number> = {
   'claude-opus':   1_000_000,
   'claude-fable':  1_000_000,
+  'claude-mythos': 1_000_000,
   'claude-sonnet':   200_000,
   'claude-haiku':    200_000,
 }

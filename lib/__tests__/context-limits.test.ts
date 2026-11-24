@@ -4,10 +4,12 @@ import { contextLimit, DEFAULT_CONTEXT_LIMITS, FALLBACK_CONTEXT_LIMIT } from '@/
 const T = DEFAULT_CONTEXT_LIMITS
 
 describe('contextLimit', () => {
-  it('gives Opus and Fable the 1M window', () => {
+  it('gives Opus, Fable and Mythos the 1M window', () => {
     expect(contextLimit('claude-opus-5', T)).toBe(1_000_000)
     expect(contextLimit('claude-opus-4-8-20251101', T)).toBe(1_000_000)
     expect(contextLimit('claude-fable-5-1', T)).toBe(1_000_000)
+    expect(contextLimit('claude-fable-5-2', T)).toBe(1_000_000)
+    expect(contextLimit('claude-mythos-5-2', T)).toBe(1_000_000)
   })
 
   it('keeps Sonnet and Haiku at 200k', () => {
