@@ -7,6 +7,7 @@ import { modelLabel } from '@/lib/model-label'
 import type { DailyCost } from '@/types/claude'
 
 const MODEL_COLORS: Record<string, string> = {
+  'claude-fable-5-2':       '#f472b6',
   'claude-fable-5-1':       '#ec4899',
   'claude-fable-5':         '#a21caf',
   'claude-opus-5-5':        '#b91c1c',
