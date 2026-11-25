@@ -40,9 +40,7 @@ than as a background deletion service when the proxy is stopped. Set
 change the limits. These limits do not delete separately downloaded exports.
 
 Proxy capture can affect Claude Code's behavior. See
-[Known limitations](./LIMITATIONS.md#live-capture). OTel body-export ingestion is
-proposed in [PR #21](https://github.com/theodo-group/cc-tap/pull/21) and is not the
-current capture flow.
+[Known limitations](./LIMITATIONS.md#live-capture).
 
 ## Exports and Team Sharing
 

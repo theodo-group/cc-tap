@@ -32,9 +32,6 @@ not a stable public API. This document describes current `main`; see
 - A custom `ANTHROPIC_BASE_URL` can change Claude Code's behavior, including its
   tools and request parameters. `ENABLE_TOOL_SEARCH=true` addresses tool search,
   but does not establish equivalence with a normal session.
-- [PR #21](https://github.com/theodo-group/cc-tap/pull/21) proposes capture from
-  Claude Code's OTel body export. It is pending work, not the current default.
-  Its proposed reconstructed SSE must not be confused with raw wire events.
 - Raw captures contain sensitive content and create a separate local copy in
   `~/.cc-lens/`. Compression is not redaction or encryption. See
   [Privacy](./PRIVACY.md#live-capture) for retention defaults.

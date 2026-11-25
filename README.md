@@ -104,9 +104,8 @@ changes marked **Unreleased**. To try those changes, [run from source](#run-from
 
 **Capture caveat:** pointing Claude Code at a custom `ANTHROPIC_BASE_URL` can change
 its behavior. `ENABLE_TOOL_SEARCH=true` preserves tool search, but does not guarantee
-that the captured request is identical to a normal session. An alternative based on
-Claude Code's OTel body export is proposed in [PR #21](https://github.com/theodo-group/cc-tap/pull/21);
-it is not the capture flow documented here. See [Known limitations](./docs/LIMITATIONS.md#live-capture).
+that the captured request is identical to a normal session. See
+[Known limitations](./docs/LIMITATIONS.md#live-capture).
 
 Raw captures can contain private prompts, source code, tool results, and thinking.
 They are compressed, not anonymized or encrypted. See [Privacy](./docs/PRIVACY.md#live-capture)
