@@ -40,4 +40,10 @@ node scripts/smoke-test.mjs cc-tap-*.tgz
 
 ## When a publish fails
 
-The tag and the GitHub release already exist at that point. Fix the cause, then re-run the failed job from the workflow run page. Do not publish the version by hand, because the package would lose its provenance record. If the fix needs a code change, merge it and release the next patch version.
+The tag and the GitHub release already exist at that point, and nothing is on npm.
+
+- If the cause is outside the repo, such as an npm outage or a missing approval, re-run the failed job from the workflow run page.
+- If the cause is in the workflow, merge the fix to `main` first. A re-run would use the workflow as it was at the release commit. Then open Actions, choose the `Release` workflow, click "Run workflow" on `main` and give it the tag, such as `v0.12.0`. It builds that tag, runs the smoke test and waits for the same approval before it publishes.
+- If the cause is in the code, merge the fix and release the next patch version.
+
+Do not publish the version by hand, because the package would lose its provenance record.

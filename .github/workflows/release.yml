@@ -8,6 +8,14 @@ on:
   push:
     branches:
       - main
+  # Publishes a tag that already exists, for a release whose publish failed.
+  # A re-run of the failed job would use the workflow as it was at that commit.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and publish, such as v0.12.0
+        required: true
+        type: string
 
 permissions: {}
 
@@ -18,6 +26,7 @@ concurrency:
 jobs:
   release-please:
     name: Release PR
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -38,16 +47,29 @@ jobs:
   build:
     name: Build and smoke test
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    # release-please is skipped on a manual run, so do not inherit its skip.
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.release_created == 'true') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      RELEASE_TAG: ${{ inputs.tag || needs.release-please.outputs.tag_name }}
     steps:
+      - name: Check the tag name
+        run: |
+          if ! printf '%s' "$RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Expected a tag like v0.12.0, got: $RELEASE_TAG"
+            exit 1
+          fi
+
       - name: Checkout the release tag
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: refs/tags/${{ env.RELEASE_TAG }}
           persist-credentials: false
+
+      - name: Check that package.json matches the tag
+        run: test "v$(node -p 'require("./package.json").version')" = "$RELEASE_TAG"
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -84,6 +106,7 @@ jobs:
   publish:
     name: Publish to npm
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     # The npm environment asks a named reviewer to approve before this job runs.
     environment: npm
@@ -109,6 +132,7 @@ jobs:
           npm --version
           node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); if (a<11 || (a===11 && (b<5 || (b===5 && c<1)))) { console.error("npm is too old for trusted publishing"); process.exit(1) }' "$(npm --version)"
 
-      # The exact file the smoke test ran is what gets published.
+      # The exact file the smoke test ran is what gets published. The leading ./
+      # matters: npm reads a bare "pack/x.tgz" as the GitHub repository pack/x.tgz.
       - name: Publish
-        run: npm publish pack/cc-tap-*.tgz --access public --ignore-scripts
+        run: npm publish ./pack/cc-tap-*.tgz --access public --ignore-scripts
