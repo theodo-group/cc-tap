@@ -9,6 +9,39 @@ This project follows a simple changelog format:
 - `Fixed` for bug fixes
 - `Security` for vulnerability fixes or privacy hardening
 
+## [0.12.0](https://github.com/theodo-group/cc-tap/compare/v0.11.0...v0.12.0) (2026-11-25)
+
+
+### Features
+
+* **build:** build cc-tap for a path prefix set by CC_TAP_BASE_PATH ([c2c67f1](https://github.com/theodo-group/cc-tap/commit/c2c67f1c55f567eff536deaad599f96e71ad1cbb))
+* **cli:** open and call a prefixed build under its prefix ([8f6b733](https://github.com/theodo-group/cc-tap/commit/8f6b73383bfdcb2f0d4a2fcb0e5b69c86eed9c2a))
+* **costs:** flag models charged at another entry's rates on the costs page ([c5a1d08](https://github.com/theodo-group/cc-tap/commit/c5a1d086cabbe243258932c0bf2cc5f695a2bfcb))
+* **costs:** take a session's cost from Claude Code's cost-state line ([91f100f](https://github.com/theodo-group/cc-tap/commit/91f100ff92f18632e6d2e52c8c4464e8475e428c))
+* **pricing:** tell a model's own price entry from a borrowed one ([e5ad5ea](https://github.com/theodo-group/cc-tap/commit/e5ad5ea05f2d010afad3a89ff93cc992938a7272))
+* **proxy:** enable tool search in suggested proxy command ([338c989](https://github.com/theodo-group/cc-tap/commit/338c9898b763f00078100e83de283ca148e299bb))
+* **proxy:** enable tool search in suggested proxy command ([6e580f9](https://github.com/theodo-group/cc-tap/commit/6e580f91fe0bd8c230edaa4559a4911492900b63))
+* serve cc-tap under a path prefix (CC_TAP_BASE_PATH) ([2358e5e](https://github.com/theodo-group/cc-tap/commit/2358e5e4c843e0c942148f86224ebee71b9c654c))
+* **sessions:** warn in the cost card when a model has no price entry ([1463c86](https://github.com/theodo-group/cc-tap/commit/1463c86084443baea352c2cb63d31538f4184898))
+
+
+### Bug Fixes
+
+* **base-path:** redirect / to the prefix, pin the env in the apiFetch test ([3e64076](https://github.com/theodo-group/cc-tap/commit/3e64076d190c45ccd754cea8db59dabe8d6d07fd))
+* **costs:** price 1-hour cache writes, and take the cost Claude Code reports ([64dbac8](https://github.com/theodo-group/cc-tap/commit/64dbac8341d4b8fa032311daf9cd62228b5d7d94))
+* name and price Opus 5.5 and Sonnet 5.5, flag models without a price entry ([916de8f](https://github.com/theodo-group/cc-tap/commit/916de8f38f4c32272b196f2c9c456b8c5add125a))
+* **package:** install no dependencies with npx cc-tap ([#32](https://github.com/theodo-group/cc-tap/issues/32)) ([a88e1db](https://github.com/theodo-group/cc-tap/commit/a88e1db237143381c906d754ef41fceda158a60e))
+* **pricing:** add Fable 5.2 and Mythos 5.2 rates ([885592b](https://github.com/theodo-group/cc-tap/commit/885592b7fba737a16c6ebb45eacd206ff0d14ad3))
+* **pricing:** add Fable 5.2 and Mythos 5.2 rates ([5f180c7](https://github.com/theodo-group/cc-tap/commit/5f180c7a0fade056ff6d955dcaf8fedf50b70bb1))
+* **pricing:** match the 2026-10 rate card, and price each request's terms ([8d101f6](https://github.com/theodo-group/cc-tap/commit/8d101f6adecd185408a095e5e2dd974bc6a6156e))
+* **pricing:** match the 2026-10 rate card, and price each request's terms ([0a00b45](https://github.com/theodo-group/cc-tap/commit/0a00b45d8fbac4b6dfa25cf8b8021bfd9756c7da))
+* **pricing:** price 1-hour cache writes at 2x input ([6b6c1ca](https://github.com/theodo-group/cc-tap/commit/6b6c1cab66e31821683e3dc154d5108e2073bde3))
+* **pricing:** price Opus 5.5 and Sonnet 5.5 on their own rates ([b420e9f](https://github.com/theodo-group/cc-tap/commit/b420e9fd1632636e1abc54d2e789311cabd3bfcd))
+* **pricing:** take request terms from every line of a response ([1f1cfdc](https://github.com/theodo-group/cc-tap/commit/1f1cfdc0bfe09e19a64bd4d70fb3f6de87e31d8f))
+* **ui:** align sidebar header with the top bar ([49b7470](https://github.com/theodo-group/cc-tap/commit/49b747035dd3e1c1966c1a7957c80bccb0cf8eb5))
+* **ui:** align sidebar header with the top bar ([9f4866b](https://github.com/theodo-group/cc-tap/commit/9f4866bd23d7ba90179c64377682d3bc1805325d))
+* **ui:** parse model labels from the id so Opus 5.5 is not shown as Opus 5 ([dad0ef1](https://github.com/theodo-group/cc-tap/commit/dad0ef1a05404b0ff51d2c9a138c951a73ff563e))
+
 ## 0.12.0
 
 Syncs upstream [Arindam200/cc-lens](https://github.com/Arindam200/cc-lens) `main` (0.4.1 and later) into the cc-tap fork.
