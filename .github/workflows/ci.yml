@@ -36,5 +36,11 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Build
-        run: npm run build
+      - name: Build the published bundle
+        run: npm run build:dist
+
+      - name: Pack
+        run: npm pack --pack-destination "$RUNNER_TEMP"
+
+      - name: Smoke test the tarball
+        run: node scripts/smoke-test.mjs "$RUNNER_TEMP"/cc-tap-*.tgz
