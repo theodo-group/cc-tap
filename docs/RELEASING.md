@@ -12,7 +12,7 @@ The type in the title decides the version. A `fix` raises the patch number and a
 
 ## Cutting a release
 
-1. Read the open release PR. Edit the changelog section in the PR if a line needs more context.
+1. Read the open release PR. Edit the changelog section in the PR if a line needs more context. Do this last, because release-please rewrites the PR and drops the edit each time something else merges to `main`.
 2. Merge it. release-please creates the `vX.Y.Z` tag and the GitHub release.
 3. The `Release` workflow checks out the tag, runs the tests, builds the bundle, packs the tarball and runs the smoke test on it.
 4. The publish job then waits. A reviewer of the `npm` environment opens the workflow run and approves it.
@@ -33,10 +33,10 @@ node scripts/smoke-test.mjs cc-tap-*.tgz
 ## Setup this depends on
 
 - GitHub allows only squash merges on this repo.
-- A ruleset on `main` requires a PR and the CI checks.
+- The `Protect main` ruleset requires a PR, one approving review, resolved review threads and a green CI run. Repo admins can bypass it.
 - A GitHub environment named `npm` lists the people who may approve a publish.
 - The `cc-tap` package on npm trusts this repo, the `release.yml` workflow and the `npm` environment. No npm token is stored in GitHub.
-- The `RELEASE_PLEASE_TOKEN` secret lets release-please open its PR as a real identity. Without it the release PR still opens, but GitHub runs no CI on it, and the ruleset then blocks the merge.
+- The `RELEASE_PLEASE_TOKEN` secret lets release-please open its PR as a real identity. Without it the release PR still opens, but GitHub runs no CI on it, and the ruleset then blocks the merge. The token is a personal one, so it expires, and its owner is the author of every release PR and cannot approve it.
 
 ## When a publish fails
 
