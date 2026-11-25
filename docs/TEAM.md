@@ -1,16 +1,19 @@
 # Team Mode
 
-Team mode aggregates Claude Code usage across multiple people with zero
-infrastructure: no server, no accounts, no agents to install. Each member
-exports a redacted metrics file; the team lead points cc-lens at a folder of
-those files.
+Team mode aggregates Claude Code usage across multiple people. Shared-folder
+mode needs no dedicated server or accounts: each member exports a redacted
+metrics file, and the team lead points cc-tap at that folder. Optional hub mode
+runs a reachable cc-tap instance and accepts explicit pushes.
+
+All commands below require Node.js 24+. The CLI is `cc-tap`; `CC_LENS_*`,
+`~/.cc-lens/`, and `.cclens-team.json` retain their names for compatibility.
 
 ## How it works
 
 ```text
 member machine                shared folder                       team lead machine
 ┌────────────────┐          ┌────────────────────────┐          ┌────────────────┐
-│ cc-lens        │ download │ alice.cclens-team.json │  read    │ cc-lens /team  │
+│ cc-tap         │ download │ alice.cclens-team.json │  read    │ cc-tap /team   │
 │ /export page   │ ───────▶ │ bob.cclens-team.json   │ ◀─────── │ CC_LENS_TEAM_  │
 │ (redacted)     │          │ carol.cclens-team.json │          │ DIR=...        │
 └────────────────┘          └────────────────────────┘          └────────────────┘
@@ -20,13 +23,13 @@ member machine                shared folder                       team lead mach
    `.cclens-team.json` with their name attached.
 2. **Everyone drops their file** into one shared folder — a git repo, a
    Drive/Dropbox folder, or a network share. Anything that syncs files works.
-3. **Anyone** runs cc-lens pointed at that folder and opens `/team`:
+3. **Anyone** runs cc-tap pointed at that folder and opens `/team`:
 
    ```bash
-   CC_LENS_TEAM_DIR=/path/to/team-exports npx cc-lens
+   CC_LENS_TEAM_DIR=/path/to/team-exports npx cc-tap
    ```
 
-   Without `CC_LENS_TEAM_DIR`, cc-lens watches `~/.cc-lens/team/`.
+   Without `CC_LENS_TEAM_DIR`, cc-tap watches `~/.cc-lens/team/`.
 
 Re-exporting is additive: the newest export per member (and per machine, if
 the member sets a machine label) wins, so stale files in the folder are
@@ -34,13 +37,18 @@ harmless.
 
 ## Hub mode: push instead of copying files
 
-Any running cc-lens instance doubles as a team hub. Run it where the team can
+Any running cc-tap instance doubles as a team hub. Run it where the team can
 reach it (an office box, a small VM, behind your VPN):
 
 ```bash
 # On the hub — pushes are rejected unless a token is set
-CC_LENS_TEAM_TOKEN=<shared-secret> npx cc-lens --host 0.0.0.0
+CC_LENS_TEAM_TOKEN='replace-with-your-shared-secret' npx cc-tap --host 0.0.0.0
 ```
+
+The token authenticates `/api/team/push`, not the dashboard's other routes. The
+hub can expose the local history of the account running it; use appropriate
+network/access controls and HTTPS or another protected transport for remote
+pushes. See [Privacy](./PRIVACY.md#network-access).
 
 The push endpoint fails closed: without `CC_LENS_TEAM_TOKEN` it returns 401.
 For tokenless experiments on localhost or a trusted LAN, opt in explicitly
@@ -49,7 +57,7 @@ with `CC_LENS_TEAM_INSECURE_LOCAL=1`.
 Members push directly from their machines, no UI needed:
 
 ```bash
-npx cc-lens push --to http://hub.internal:3000 --name "Alice" --token <shared-secret>
+CC_LENS_TEAM_TOKEN='replace-with-your-shared-secret' npx cc-tap push --to http://hub.internal:3000 --name "Alice"
 ```
 
 `push` builds the same redacted export locally and POSTs it to
@@ -62,7 +70,7 @@ attribution.
 Automate freshness with cron:
 
 ```bash
-0 18 * * 1-5  npx cc-lens push --to http://hub.internal:3000 --name "Alice" --token $CC_LENS_TEAM_TOKEN
+0 18 * * 1-5  npx cc-tap push --to http://hub.internal:3000 --name "Alice" --token $CC_LENS_TEAM_TOKEN
 ```
 
 ## What the team sees
@@ -82,7 +90,7 @@ Automate freshness with cron:
 Any member can print a formatted team summary in the terminal:
 
 ```bash
-npx cc-lens digest --team --days 7
+npx cc-tap digest --team --days 7
 ```
 
 The digest covers spend vs the prior period, top members, and session
@@ -108,8 +116,10 @@ Team exports are redacted by default (`metrics` level):
 | Command history, todos, plans, memory | Never exported |
 
 The export is a plain JSON file — members can (and should) inspect it before
-sharing. The redaction is an allowlist: fields not explicitly listed in
-`lib/redact.ts` never make it into an export.
+sharing. Redacted does not mean anonymous: member identity, project names, MCP
+tool names, and usage patterns can still be sensitive. General `.cclens.json`
+exports do not use this redaction. The Team redaction is an allowlist: fields not
+explicitly listed in `lib/redact.ts` never make it into a Team session export.
 
 ## Data completeness and its limits
 
@@ -118,14 +128,16 @@ An export contains every session recorded there at export time. Known gaps:
 
 - **Manual cadence.** Data is as fresh as the last export. Teams typically
   re-export weekly; a CI job or cron that hits
-  `POST /api/export/team` on each member's machine can automate it.
+  `POST /api/export/team` on each member's machine can automate it (include
+  `memberName` in the JSON request). The CLI `push` command performs that export
+  and sends it to the selected hub.
 - **Cloud sessions.** Sessions run on claude.ai/code or Anthropic-managed
   routines don't write to a local `~/.claude` unless teleported into the CLI.
 - **Multiple machines.** Use the machine label so one person's laptop and
   desktop both count, deduped per machine rather than overwriting each other.
 
-For guaranteed-complete, real-time team data, Claude Code ships native
-OpenTelemetry support (`CLAUDE_CODE_ENABLE_TELEMETRY=1`) that administrators
+For centralized telemetry beyond manual local-history exports, Claude Code ships
+native OpenTelemetry support (`CLAUDE_CODE_ENABLE_TELEMETRY=1`) that administrators
 can enforce org-wide through the managed settings file. It exports cost,
 token, lines-of-code, commit, and PR metrics tagged with `user.email`,
 `organization.id`, and `session.id` to any OTLP endpoint. That is the
