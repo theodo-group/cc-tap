@@ -17,6 +17,7 @@ The type in the title decides the version. A `fix` raises the patch number and a
 3. The `Release` workflow checks out the tag, runs the tests, builds the bundle, packs the tarball and runs the smoke test on it.
 4. The publish job then waits. A reviewer of the `npm` environment opens the workflow run and approves it.
 5. The job publishes the tarball the smoke test ran. npm records which commit and workflow built it.
+6. A last job waits for npm to list the version, downloads it from the registry, checks it is the file CI built and runs the smoke test on it. Its summary says how long npm took. The release is installable when this job is green.
 
 ## The smoke test
 

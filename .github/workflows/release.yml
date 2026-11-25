@@ -63,7 +63,7 @@ jobs:
           fi
 
       - name: Checkout the release tag
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: refs/tags/${{ env.RELEASE_TAG }}
           persist-credentials: false
@@ -72,7 +72,7 @@ jobs:
         run: test "v$(node -p 'require("./package.json").version')" = "$RELEASE_TAG"
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -115,10 +115,12 @@ jobs:
       id-token: write # npm trusted publishing signs in with this, no token stored
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+          # This job has no checkout, so there is nothing to cache.
+          package-manager-cache: false
 
       - name: Fetch the tested tarball
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -136,3 +138,73 @@ jobs:
       # matters: npm reads a bare "pack/x.tgz" as the GitHub repository pack/x.tgz.
       - name: Publish
         run: npm publish ./pack/cc-tap-*.tgz --access public --ignore-scripts
+
+  verify:
+    name: Verify on npm
+    needs: [release-please, build, publish]
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ inputs.tag || needs.release-please.outputs.tag_name }}
+    steps:
+      - name: Checkout the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      # npm points "latest" at a new version a few minutes before the version
+      # can be installed. Ask the way a user's npm does, and only fetch the
+      # tarball once the version is listed: a tarball requested too early gets
+      # a "not found" that the registry caches for five minutes.
+      - name: Wait for npm to list the version
+        run: |
+          version="${RELEASE_TAG#v}"
+          start=$(date +%s)
+          until npm view "cc-tap@$version" version --prefer-online >/dev/null 2>&1; do
+            waited=$(( $(date +%s) - start ))
+            if [ "$waited" -ge 900 ]; then
+              echo "::error::npm still does not list cc-tap@$version after 15 minutes"
+              exit 1
+            fi
+            sleep 15
+          done
+          waited=$(( $(date +%s) - start ))
+          echo "cc-tap@$version listed ${waited}s after this job started"
+          echo "npm listed \`cc-tap@$version\` ${waited}s after the publish job ended." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download the published tarball
+        run: |
+          mkdir -p "$RUNNER_TEMP/published"
+          cd "$RUNNER_TEMP/published"
+          for attempt in 1 2 3 4 5 6; do
+            npm pack "cc-tap@${RELEASE_TAG#v}" --prefer-online && exit 0
+            sleep 30
+          done
+          echo "::error::npm lists the version but its tarball cannot be downloaded"
+          exit 1
+
+      - name: Fetch the tarball CI built
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tarball
+          path: built
+
+      - name: Check npm serves the file CI built
+        run: |
+          built=$(sha256sum built/cc-tap-*.tgz | cut -d' ' -f1)
+          published=$(sha256sum "$RUNNER_TEMP"/published/cc-tap-*.tgz | cut -d' ' -f1)
+          echo "built:     $built"
+          echo "published: $published"
+          test "$built" = "$published"
+
+      - name: Smoke test the published tarball
+        run: node scripts/smoke-test.mjs "$RUNNER_TEMP"/published/cc-tap-*.tgz
