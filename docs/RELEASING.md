@@ -17,14 +17,7 @@ The type in the title decides the version. A `fix` raises the patch number and a
 3. The `Release` workflow checks out the tag, runs the tests, builds the bundle, packs the tarball and runs the smoke test on it.
 4. The publish job then waits. A reviewer of the `npm` environment opens the workflow run and approves it.
 5. The job publishes the tarball the smoke test ran. npm records which commit and workflow built it.
-
-## After the publish
-
-The new version takes a few minutes to become installable. The 0.12.0 publish finished at 17:12 UTC, and the registry listed the version at 17:16.
-
-- Wait for `npm view cc-tap version` to print the new version before trying `npx cc-tap`.
-- Do not request the tarball URL before then. The registry caches a "not found" answer for five minutes, and everyone on the same network edge gets that 404 until it expires.
-- Treat an `ETARGET` or a 404 on the tarball in the first ten minutes as this delay. After that, it is a real failure.
+6. A last job waits for npm to list the version, downloads it from the registry, checks it is the file CI built and runs the smoke test on it. Its summary says how long npm took. The release is installable when this job is green.
 
 ## The smoke test
 
