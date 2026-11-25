@@ -9,7 +9,7 @@ This project follows a simple changelog format:
 - `Fixed` for bug fixes
 - `Security` for vulnerability fixes or privacy hardening
 
-## 0.12.0
+## [0.12.0](https://github.com/theodo-group/cc-tap/compare/v0.11.0...v0.12.0) (2026-11-25)
 
 Syncs upstream [Arindam200/cc-lens](https://github.com/Arindam200/cc-lens) `main` (0.4.1 and later) into the cc-tap fork.
 
@@ -38,6 +38,7 @@ Syncs upstream [Arindam200/cc-lens](https://github.com/Arindam200/cc-lens) `main
 - **Opus 5.5 and Sonnet 5.5 show under their own names.** The labels matched ids by substring, so `claude-opus-5-5` hit the `opus-5` rule and showed as "Opus 5" (and `claude-sonnet-5-5` as "Sonnet 5") in the replay turn cards, overview donut, cost chart and token table. Labels are now parsed from the id by `lib/model-label.ts`, shared by all four, so later releases get the right name without a code change.
 - **Opus 5.5 is priced at its own $4 / $20 rate** (cache reads $0.20) instead of Opus 5's $5 / $25 through the `claude-opus-5` prefix, which overstated its cost by 25%. Sonnet 5.5 gets its own entry at the Sonnet 5 rate. The "short sessions ran on a premium model" insight now counts models from $4/MTok input, so Opus 5.5 sessions still qualify, and compares against Sonnet 5.5.
 - **1-hour cache writes are priced at 2× input**, not at the 5-minute rate (1.25×). Claude Code writes its main thread to the 1-hour cache, so every interactive session was underpriced: −20 % on Fable 5.1 over 49 sessions compared with the cost Claude Code itself reports. The TTL split (`cache_creation.ephemeral_1h_input_tokens`) is now kept per turn in the ledger and per model as `cacheCreation1hInputTokens`. A `pricing.json` entry can set `cacheWrite1h`; without it, 2× `input` applies. The Pricing Reference table shows both write rates.
+- **`npx cc-tap` installs no dependencies.** The package listed its 26 build dependencies as runtime ones, so an install pulled in about 104 packages next to a bundle that already contains what it runs. They are now `devDependencies` ([#32](https://github.com/theodo-group/cc-tap/issues/32)).
 
 ## 0.11.0
 
