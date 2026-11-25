@@ -9,10 +9,6 @@ This project follows a simple changelog format:
 - `Fixed` for bug fixes
 - `Security` for vulnerability fixes or privacy hardening
 
-## Unreleased
-
-Nothing yet.
-
 ## 0.12.0
 
 Syncs upstream [Arindam200/cc-lens](https://github.com/Arindam200/cc-lens) `main` (0.4.1 and later) into the cc-tap fork.

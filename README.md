@@ -46,8 +46,8 @@ your real Claude Code history.
 
 This README describes the current source branch. The npm package and GitHub
 releases may contain different sets of changes. Check `npx cc-tap --version`
-when reporting a problem, and consult the [changelog](./docs/CHANGELOG.md) for
-changes marked **Unreleased**. To try those changes, [run from source](#run-from-source).
+when reporting a problem, and consult the [changelog](./docs/CHANGELOG.md) to see
+what each version contains. To try changes newer than your version, [run from source](#run-from-source).
 
 ## What You Can See
 

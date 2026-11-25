@@ -2,7 +2,7 @@
 
 `cc-tap` reads local Claude Code files directly. Those formats can change and are
 not a stable public API. This document describes current `main`; see
-[CHANGELOG.md](./CHANGELOG.md) for released and unreleased changes.
+[CHANGELOG.md](./CHANGELOG.md) for what each version contains.
 
 ## Data Accuracy
 
