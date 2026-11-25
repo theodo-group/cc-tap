@@ -34,10 +34,10 @@ node scripts/smoke-test.mjs cc-tap-*.tgz
 ## Setup this depends on
 
 - GitHub allows only squash merges on this repo.
-- The `Protect main` ruleset requires a PR, one approving review, resolved review threads and a green CI run. Repo admins can bypass it.
+- The `Protect main` ruleset requires a PR, resolved review threads, a green CI run and a conventional PR title. It requires no approval. Repo admins can bypass it.
 - A GitHub environment named `npm` lists the people who may approve a publish.
 - The `cc-tap` package on npm trusts this repo, the `release.yml` workflow and the `npm` environment. No npm token is stored in GitHub.
-- The `RELEASE_PLEASE_TOKEN` secret lets release-please open its PR as a real identity. Without it the release PR still opens, but GitHub runs no CI on it, and the ruleset then blocks the merge. The token is a personal one, so it expires, and its owner is the author of every release PR and cannot approve it.
+- A GitHub App installed on this repo opens the release PR, so that GitHub runs CI on it. The workflow reads the app's client ID from the `RELEASE_APP_CLIENT_ID` variable and its private key from the `RELEASE_APP_PRIVATE_KEY` secret. The app needs read and write access to contents and pull requests, and nothing else. Without those two settings the workflow falls back to a personal `RELEASE_PLEASE_TOKEN` secret, which expires.
 
 ## When a publish fails
 
